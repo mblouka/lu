@@ -167,7 +167,7 @@ export function transformImports(): Transformer {
                     assignment: [t.call(t.name('require'), [stat.path])]
                 }
             } else {
-                const store = `__import${count}`
+                const store = `__import${count++}`
 
                 // Add the require.
                 block.unshift(<Parser.LocalAssignmentStatement> {
