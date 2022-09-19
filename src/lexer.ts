@@ -31,7 +31,7 @@ export type OperatorsUnion =
     '+=' | '-=' | '*=' | '/=' | '%=' | '^=' | '..=' |
 
     // Lu operators
-    '@' | '|' |
+    '@' | '|' | 
 
     // Pseudo operators.
     'exprIndex' | 'nameIndex';

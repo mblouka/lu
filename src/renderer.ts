@@ -1,6 +1,5 @@
 
 import * as Parser from './parser'
-import { Function } from './func';
 
 const tabChar = '  ';
 
@@ -16,27 +15,27 @@ export function renderFunction(tabLevel = 1, args: string[], vararg: boolean, st
 }
 
 export function renderExpression(expr: Parser.Expression | Parser.ExpressionAtom, tabLevel = 1): string {
-    if ('native' in expr) {
+    if ('value' in expr) {
         // render atom
         if (expr.type === 'boolean') {
-            return expr.native as boolean ? 'true' : 'false';
+            return expr.value as boolean ? 'true' : 'false';
         } else if (expr.type === 'var') {
-            return expr.native as string;
+            return expr.value as string;
         } else if (expr.type === 'number') {
-            return `${expr.native as number}`;
+            return `${expr.value as number}`;
         } else if (expr.type === 'vararg') {
             return '...';
         } else if (expr.type === 'nil') {
             return 'nil';
         } else if (expr.type === 'call') {
-            return `(${(expr.native as Parser.Expression[]).map(expr => renderExpression(expr, tabLevel)).join(', ')})`;
+            return `(${(expr.value as Parser.Expression[]).map(expr => renderExpression(expr, tabLevel)).join(', ')})`;
         } else if (expr.type === 'func') { // dear god
-            const func = expr.native as Function;
+            const func = expr.value as Parser.Function;
             return renderFunction(tabLevel, func.args, func.vararg,func.stats);
         } else if (expr.type === 'string') {
-            return `"${expr.native as string}"`;
+            return `"${expr.value as string}"`;
         } else  if (expr.type === 'element') {
-            const element = <Parser.ElementConstructor> expr.native
+            const element = <Parser.ElementConstructor> expr.value
 
             /* Render properties. */
             const properties = 
@@ -66,7 +65,7 @@ export function renderExpression(expr: Parser.Expression | Parser.ExpressionAtom
                 return `<${element.name}${propertyString}/>`
             }
         } else if (expr.type === 'table') {
-            const tableMap = expr.native as Parser.TableConstructor;
+            const tableMap = expr.value as Parser.TableConstructor;
             const tableDictionary: string[] = [];
             const tableArray: string[] = [];
             tableMap.forEach((value, key) => {
@@ -105,7 +104,7 @@ export function renderExpression(expr: Parser.Expression | Parser.ExpressionAtom
                     return `(${renderExpression(expr.left)} ${expr.op} ${renderExpression(expr.right)})`;
                 }
             } else {
-                return `${renderExpression(expr.left)}(${((expr.right as Parser.ExpressionAtom).native as Parser.Expression[]).map(expr => renderExpression(expr)).join(', ')})`;
+                return `${renderExpression(expr.left)}(${((expr.right as Parser.ExpressionAtom).value as Parser.Expression[]).map(expr => renderExpression(expr)).join(', ')})`;
             }
         }
 

@@ -1,11 +1,96 @@
 
+import { OperatorsUnion } from './lexer';
 import * as Parser from './parser';
-import Function from './func'
-import { Expression, ExpressionArith, ExpressionAtom, Ast, Statement, StatementType, IgnoredStatement, TableConstructor } from './parser';
+import { Expression, ExpressionArith, ExpressionAtom, Statement, StatementType, IgnoredStatement, Function } from './parser';
 
-// deno-lint-ignore no-explicit-any
 type TransformCallback = (stat: Statement, block: Statement[], index: number) => any | undefined;
 export type Transformer = Partial<Record<StatementType, TransformCallback>>
+
+export interface TransformState {
+
+}
+
+/**
+ * Helper constructors for some things.
+ */
+const t = {
+    expression(op: OperatorsUnion | { op: OperatorsUnion, unary: boolean }, left: Expression, right?: Expression) {
+        return <ExpressionArith> {
+            left, right, op: typeof op === 'string' ? op : op.op, unary: typeof op === 'string' ? false : op.unary
+        }
+    },
+
+    atom(type: Parser.ExpressionAtomType, value: ExpressionAtom['value']) {
+        return <ExpressionAtom> { type, value }
+    },
+
+    nil() {
+        return t.atom('nil', undefined)
+    },
+
+    string(value: string) {
+        return t.atom('string', value)
+    },
+
+    number(value: number) {
+        return t.atom('number', value)
+    },
+
+    boolean(value: boolean) {
+        return t.atom('boolean', value)
+    },
+
+    name(value: string) {
+        return t.atom('var', value)
+    },
+
+    table(value: Parser.TableConstructor) {
+        return t.atom('table', value)
+    },
+
+    closure(statements: Statement[], args?: string[], vararg?: boolean) {
+        return t.atom('func', {
+            stats: statements,
+            args: args ?? [],
+            vararg: vararg ?? false
+        })
+    },
+
+    object(value: Record<string | number, ExpressionAtom['value'] | Expression>) {
+        const tbl = new Map<number | Parser.Expression, Parser.Expression>()
+        for (const [key, v] of Object.entries(value)) {
+            let value: Expression
+            if (typeof v === 'string') {
+                value = t.string(v)
+            } else if (typeof v === 'number') {
+                value = t.number(v)
+            } else if (typeof v === 'boolean') {
+                value = t.boolean(v)
+            } else if (typeof v === 'undefined') {
+                value = t.nil()
+            } else {
+                if ('type' in v || 'op' in v) {
+                    value = v
+                } else if ('stats' in v) {
+                    value = { type: 'func', value: v }
+                } else if ('properties' in v) {
+                    value = { type: 'element', value: v }
+                } else if (v instanceof Map) {
+                    value = { type: 'table', value: v }
+                } else {
+                    value = t.table(t.object(<Record<string | number, ExpressionAtom['value'] | Expression>> <unknown> v))
+                }
+            }
+
+            if (typeof key === 'string') {
+                tbl.set(t.string(key), value)
+            } else {
+                tbl.set(key, value)
+            }
+        }
+        return tbl
+    }
+}
 
 /**
  * Apply transformations to a given list of statements.
@@ -73,59 +158,36 @@ export function transformIntrinsics(): Transformer {
                 // Build local descriptors.
                 const localDescriptors: Parser.TableConstructor[] = []
                 for (const variable of localstat.vars) {
-                    const descriptor = new Map<Expression | number, Expression>()
+                    localDescriptors.push(t.object({
+                        name: variable,
 
-                    // Set name field.
-                    descriptor.set(
-                        { native: 'name', type: 'string' }, 
-                        { native: variable, type: 'string' }
-                    )
+                        // Getter.
+                        get: t.closure([
+                            <Parser.ReturnExpression> {
+                                type: StatementType.ReturnExpression,
+                                line: nextstat.line,
+                                exprs: [ t.name(variable) ]
+                            }
+                        ]),
 
-                    // Set getter.
-                    descriptor.set(
-                        { native: 'get', type: 'string' },
-                        { native: <Function> {
-                            vararg: false,
-                            args: [],
-                            stats: [
-                                <Parser.ReturnExpression> {
-                                    type: StatementType.ReturnExpression,
-                                    line: nextstat.line,
-                                    exprs: [ <ExpressionAtom> { native: variable, type: 'var' } ]
-                                }
-                            ]
-                        }, type: 'func'} 
-                    )
-
-                    // Set setter.
-                    descriptor.set(
-                        { native: 'set', type: 'string' },
-                        { native: <Function> {
-                            vararg: false,
-                            args: ['v'],
-                            stats: [
-                                <Parser.AssignmentStatement> {
-                                    type: StatementType.Assignment,
-                                    line: nextstat.line,
-                                    left: [ <ExpressionAtom> { native: variable, type: 'var' } ],
-                                    right: [ <ExpressionAtom> { native: 'v', type: 'var' } ],
-                                }
-                            ]
-                        }, type: 'func'} 
-                    )
-
-                    localDescriptors.push(descriptor)
+                        // Setter.
+                        set: t.closure([
+                            <Parser.AssignmentStatement> {
+                                type: StatementType.Assignment,
+                                line: nextstat.line,
+                                left: [ t.name(variable) ],
+                                right: [ t.name('v') ],
+                            }
+                        ], ['v'])
+                    }))
                 }
 
-                const atoms = localDescriptors.map(v => <Parser.ExpressionAtom> { native: v , type: 'table' })
-                const nstat = <Statement> {
+                block.splice(index + 2, 0, <Statement> {
                     type: StatementType.FunctionCall,
                     line: stat.line,
                     expr: stat.expr,
-                    args: (stat.args ?? []).concat(atoms)
-                }
-
-                block.splice(index + 2, 0, nstat)
+                    args: (stat.args ?? []).concat(localDescriptors.map(v => t.table(v)))
+                })
 
             } else if (nextstat.type === StatementType.FunctionDefinition) {
                 const funcstat = nextstat as Parser.FunctionDefinition
@@ -135,29 +197,18 @@ export function transformIntrinsics(): Transformer {
                 let expr: ExpressionArith | undefined
                 
                 if (typeof funcpath[0] === 'string') {
-                    expr = <ExpressionArith> <unknown> <ExpressionAtom> {
-                        type: 'var', native: funcpath[0]
-                    }
+                    expr = <ExpressionArith> <unknown> <ExpressionAtom> t.name(funcpath[0])
                 } else {
                     funcpath[0].forEach((next, i) => {
                         if (!expr) {
-                            expr = <ExpressionArith> {
-                                left: { type: 'var', native: next },
-                                right: undefined,
-                                op: 'exprIndex'
-                            }
+                            expr = t.expression('exprIndex', t.name(next))
                         } else {
                             if (funcpath[0][i + 1]) {
-                                const nexpr = <ExpressionArith> {
-                                    left: { type: 'string', native: next },
-                                    right: undefined,
-                                    op: 'exprIndex'
-                                }
-
+                                const nexpr = t.expression('exprIndex', t.string(next))
                                 expr.right = nexpr
                                 expr = nexpr
                             } else {
-                                expr.right = { type: 'string', native: next }
+                                expr.right = t.string(next)
                             }
                         }
                     })
@@ -179,9 +230,9 @@ export function transformIntrinsics(): Transformer {
                     left: [expr],
                     right: [{ 
                         left: stat.expr, 
-                        right: { type: 'call', native: (stat.args ?? []).concat(
-                            { type: 'string', native: funcsig },
-                            { type: 'func', native: funcstat.func }
+                        right: { type: 'call', value: (stat.args ?? []).concat(
+                            t.string(funcsig),
+                            { type: 'func', value: funcstat.func }
                         ) }
                     }]
                 })
@@ -194,9 +245,9 @@ export function transformIntrinsics(): Transformer {
                     vars: [funcstat.var],
                     assignment: [{ 
                         left: stat.expr, 
-                        right: { type: 'call', native: (stat.args ?? []).concat(
-                            { type: 'string', native: `${funcstat.var}(${funcstat.func.args.concat(funcstat.func.vararg ? ['...'] : []).join(', ')})` },
-                            { type: 'func', native: funcstat.func }
+                        right: { type: 'call', value: (stat.args ?? []).concat(
+                            t.string(`${funcstat.var}(${funcstat.func.args.concat(funcstat.func.vararg ? ['...'] : []).join(', ')})`),
+                            { type: 'func', value: funcstat.func }
                         ) }
                     }]
                 })

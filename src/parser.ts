@@ -3,8 +3,6 @@
 // Necessary for loading in transformers.
 
 import { TokenType, Token, TokenValue, WordsUnion, OperatorsUnion } from './lexer';
-//import { Expression, ExpressionParser } from './expr.ts';
-import Function from './func';
 
 export enum StatementType {
     Constructor,
@@ -73,6 +71,12 @@ export type ForGenericBlock =
 export type ForNumericBlock =
     Statement & { var: string; start: Expression; end: Expression; step?: Expression; stats: Statement[] };
 
+export interface Function {
+    stats: Statement[];
+    vararg: boolean;
+    args: string[];
+}
+
 
 export type Ast = Statement[];
 
@@ -106,7 +110,7 @@ export type ExpressionAtomType =
  * Atoms are the lowest degree elements in an expression.
  */
 export interface ExpressionAtom {
-    native: number | string | boolean | undefined | Function | Expression[] | TableConstructor | ElementConstructor
+    value: number | string | boolean | undefined | Function | Expression[] | TableConstructor | ElementConstructor
     type: ExpressionAtomType
 }
 
@@ -199,7 +203,7 @@ export function parse(tokens: Token[]): Statement[] {
             if (test(TokenType.Name) && testLookahead(1, TokenType.Operator, '=')) {
                 const str = expect<string>(TokenType.Name, undefined, true);
                 expect(TokenType.Operator, '=', true)
-                tableConstructor.set({ type: 'string', native: str }, expression())
+                tableConstructor.set({ type: 'string', value: str }, expression())
             } else if (testNext(TokenType.Operator, '[')) {
                 const key = expression()
                 expect(TokenType.Operator, ']', true)
@@ -211,9 +215,9 @@ export function parse(tokens: Token[]): Statement[] {
                 const varkey = <string> expect(TokenType.Name, undefined, true)
                 const [fargs, vararg] = args()
                 const fblock = block('endBlock')
-                tableConstructor.set({ type: 'string', native: varkey }, { 
+                tableConstructor.set({ type: 'string', value: varkey }, { 
                     type: 'func', 
-                    native: { 
+                    value: { 
                         args: fargs, 
                         vararg: vararg, 
                         stats: fblock 
@@ -253,7 +257,7 @@ export function parse(tokens: Token[]): Statement[] {
                     if (test(TokenType.String)) {
                         properties[propertyName] = { 
                             type: 'string',
-                            native: <string> expect(TokenType.String)
+                            value: <string> expect(TokenType.String)
                         }
                         i++
                     } else if (testNext(TokenType.Operator, '{')) {
@@ -264,7 +268,7 @@ export function parse(tokens: Token[]): Statement[] {
                     /* Implied boolean. */
                     properties[propertyName] = { 
                         type: 'boolean', 
-                        native: true 
+                        value: true 
                     }
                 }
             }
@@ -292,7 +296,7 @@ export function parse(tokens: Token[]): Statement[] {
                     i += 2 // Skip over '</'
                     break
                 }
-                children.push({ type: 'element', native: element() })
+                children.push({ type: 'element', value: element() })
             } else {
                 assert(false, 'bruh')
             }
@@ -326,16 +330,16 @@ export function parse(tokens: Token[]): Statement[] {
                 unary: true 
             }
         } else if (testNext(TokenType.Operator, '...')) {
-            return { type: 'vararg', native: undefined };
+            return { type: 'vararg', value: undefined };
         } else if (test(TokenType.Operator, '{')) {
-            return { type: 'table', native: table() };
+            return { type: 'table', value: table() };
         } else if (test(TokenType.Operator, '<')) {
-            return { type: 'element', native: element() }
+            return { type: 'element', value: element() }
         } else if (test(TokenType.Operator, '|')) {
             const [fargs, vararg] = args(true)
             return { 
                 type: 'func', 
-                native: <Function> { 
+                value: <Function> { 
                     args: fargs, 
                     vararg: vararg, 
                     stats: [<ReturnExpression> {
@@ -349,24 +353,24 @@ export function parse(tokens: Token[]): Statement[] {
             const cur = tokens[i++]
             switch (cur.type) {
                 case TokenType.Number: 
-                    return { type: 'number', native: <number> cur.value }
+                    return { type: 'number', value: <number> cur.value }
                 case TokenType.String: 
-                    return { type: 'string', native: <string> cur.value }
+                    return { type: 'string', value: <string> cur.value }
                 case TokenType.Name: 
-                    return { type: 'var', native: <string> cur.value }
+                    return { type: 'var', value: <string> cur.value }
                 case TokenType.Word: {
                     if (cur.value === 'true') {
-                        return { type: 'boolean', native: true };
+                        return { type: 'boolean', value: true };
                     } else if (cur.value === 'false') {
-                        return { type: 'boolean', native: false };
+                        return { type: 'boolean', value: false };
                     } else if (cur.value === 'nil') {
-                        return { type: 'nil', native: undefined };
+                        return { type: 'nil', value: undefined };
                     } else if (cur.value === 'function') {
                         const [fargs, vararg] = args()
                         const fblock = block('endBlock')
                         return { 
                             type: 'func', 
-                            native: { 
+                            value: { 
                                 args: fargs, 
                                 vararg: vararg, 
                                 stats: fblock 
@@ -376,7 +380,7 @@ export function parse(tokens: Token[]): Statement[] {
                 } /* falls through */
                 default: {
                     assert(false, `Invalid token "${cur.value}" in expression`);
-                    return { type: 'nil', native: undefined };
+                    return { type: 'nil', value: undefined };
                 }
             }
         }
@@ -417,7 +421,7 @@ export function parse(tokens: Token[]): Statement[] {
                     left: lhs, 
                     right: { 
                         type: 'var', 
-                        native: indexExpr 
+                        value: indexExpr 
                     }, 
                     op: 'nameIndex' 
                 }
@@ -453,7 +457,7 @@ export function parse(tokens: Token[]): Statement[] {
                     left: lhs, 
                     right: { 
                         type: 'call', 
-                        native: argExprs 
+                        value: argExprs 
                     } 
                 }
                 cur = tokens[i]
