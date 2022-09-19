@@ -7,6 +7,9 @@
     "build": "tsc",
     "dev": "tsc --watch"
   },
+  "bin": {
+    "lu": "dist/cli.js"
+  },
   "repository": {
     "type": "git",
     "url": "git+https://github.com/ccreaper/lu.git"

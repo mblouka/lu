@@ -152,8 +152,8 @@ export function minify(): Transformer {
     return {}
 }
 
-// Transforms Lu ASTs into Lua 5.1-compatible ASTs.
-export function transformIntoLua51(): Transformer {
+// Transforms Lu compound operations.
+export function transformCompounds(): Transformer {
     return {
         // Transform Luau compound assignments into Lua-compatible assignments.
         [StatementType.CompoundAssignment]: (statement: Parser.Statement, _, __) => {
@@ -303,11 +303,11 @@ export function transformIntrinsics(): Transformer {
             } else if (nextstat.type === StatementType.LocalFunctionDefinition) {
                 const funcstat = nextstat as Parser.LocalFunctionDefinition
 
-                block.splice(index + 1, 1, <Statement> <Parser.LocalAssignmentStatement> {
-                    type: StatementType.LocalAssignment,
+                block.splice(index + 1, 1, <Statement> <Parser.AssignmentStatement> {
+                    type: StatementType.Assignment,
                     line: stat.line,
-                    vars: [funcstat.var],
-                    assignment: [{ 
+                    left: [t.name(funcstat.var)],
+                    right: [{ 
                         left: stat.expr, 
                         right: { type: 'call', value: (stat.args ?? []).concat(
                             t.string(`${funcstat.var}(${funcstat.func.args.concat(funcstat.func.vararg ? ['...'] : []).join(', ')})`),
@@ -315,6 +315,12 @@ export function transformIntrinsics(): Transformer {
                         ) }
                     }]
                 })
+
+                return <Parser.LocalAssignmentStatement> {
+                    type: StatementType.LocalAssignment,
+                    line: stat.line,
+                    vars: [funcstat.var]
+                }
             }
 
             return IgnoredStatement

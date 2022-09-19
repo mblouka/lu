@@ -2,39 +2,50 @@
 import fs from 'fs'
 import path from 'path'
 
+import {
+    transform,
+    transformIntrinsics,
+    transformImports,
+    transformCompounds
+} from './transformer'
+
+import { lex } from './lexer'
+import { render } from './renderer'
+import { parse, purge } from './parser'
+
 export interface LuProject {
     /**
      * Name of the project. The `__LU_PROJECT__` macro will
      * be filled in with this value.
      */
-    readonly name: string
+    name: string
 
     /**
      * Entrypoint of the project. Defaults to `init.lua`.
      */
-    readonly entrypoint: string
+    entrypoint: string
 
     /**
      * Whether scripts should be bundled into a single file.
      * Incompatible with `outDir` setting, set `outFile` instead.
      */
-    readonly bundle?: boolean
+    bundle?: boolean
 
     /**
      * Directory to output all Lu scripts. Incompatible with `bundle`
      * setting.
      */
-    readonly outDir?: string
+    outDir?: string
 
     /**
      * File to output the bundle to. Incompatible with `outDir` setting.
      */
-    readonly outFile?: string
+    outFile?: string
 
     /**
      * Name of the jsx constructor. Defaults to `h`.
      */
-    readonly jsxConstructor?: string
+    jsxConstructor?: string
 }
 
 export interface LuProjectInstance {
@@ -56,11 +67,42 @@ export function project(root: string) {
     }
 
     const config = <LuProject> JSON.parse(fs.readFileSync(luconfigJsonPath, 'utf-8'))
+
+    // Setup default entrypoint.
+    if (!config.entrypoint) {
+        config.entrypoint = 'init.lua'
+    }
+
+    // Setup default JSX constructor.
+    if (!config.jsxConstructor) {
+        config.jsxConstructor = 'h'
+    }
+
     return <LuProjectInstance> {
         root, config
     }
 }
 
 export function make(instance: LuProjectInstance) {
-    
+    function transformFile(fileContents: string, filePath: string) {
+        return render(transform(parse(purge(lex(fileContents))), [
+            transformCompounds(), transformImports(), transformIntrinsics()
+        ]))
+    }
+
+    // Todo: trace 'require' calls after expression visitation is impl.
+    // For now, we are single file only.
+    if (instance.config.outFile) {
+        const outfilePath = path.join(instance.root, instance.config.outFile)
+        const entryPath = path.join(instance.root, instance.config.entrypoint)
+        const entryScript = fs.readFileSync(entryPath, 'utf-8')
+
+        // Transform the entry script.
+        const transformedScript = transformFile(entryScript, entryPath)
+
+        // Write to outfile.
+        fs.writeFileSync(outfilePath, transformedScript, 'utf-8')
+
+        return;
+    }
 }

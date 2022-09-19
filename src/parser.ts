@@ -589,7 +589,8 @@ export function parse(tokens: Token[]): Statement[] {
                         && !test(TokenType.Word, 'true')
                         && !test(TokenType.Word, 'false')
                         && !test(TokenType.Word, 'not')
-                        && !test(TokenType.Word, 'nil')) 
+                        && !test(TokenType.Word, 'nil')
+                        && !test(TokenType.Word, 'function')) 
                     {
                         return <ReturnExpression> { 
                             type: StatementType.ReturnExpression, 

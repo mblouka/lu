@@ -4,11 +4,11 @@ import render from './renderer'
 import { parse, purge } from './parser'
 
 // Lua 5.1 transform target.
-import { transform, transformIntoLua51, transformIntrinsics, transformImports } from './transformer'
+import { transform, transformCompounds, transformIntrinsics, transformImports } from './transformer'
 
 const testScript = `
 
-import { a, b } from script.Parent.MyModule
+local a = -1
 
 `
 

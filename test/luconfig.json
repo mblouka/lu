@@ -1,5 +1,5 @@
 {
     "name": "Test Project",
-    "entrypoint": "./src/init.lua",
+    "entrypoint": "./src/init.lu",
     "outFile": "dist.lua"
 }
