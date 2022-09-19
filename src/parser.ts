@@ -207,6 +207,18 @@ export function parse(tokens: Token[]): Statement[] {
                 tableConstructor.set(key, expression())
             } else if (testNext(TokenType.Operator, '}')) {
                 break
+            } else if (testNext(TokenType.Word, 'function')) {
+                const varkey = <string> expect(TokenType.Name, undefined, true)
+                const [fargs, vararg] = args()
+                const fblock = block('endBlock')
+                tableConstructor.set({ type: 'string', native: varkey }, { 
+                    type: 'func', 
+                    native: { 
+                        args: fargs, 
+                        vararg: vararg, 
+                        stats: fblock 
+                    } 
+                })
             } else {
                 // set value in the table's array component
                 tableConstructor.set(++tableArrayIndex, expression())

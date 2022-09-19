@@ -8,10 +8,10 @@ import { transform, transformIntoLua51, transformIntrinsics } from './transforme
 
 const testScript = `
 
-@injectmything
-local function abc(a)
-    print("yolo")
-end
+local t = {
+    function abc(d, e) end,
+    function def() end
+}
 
 `
 
