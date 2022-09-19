@@ -105,12 +105,32 @@ const t = {
 export function transform(statements: Statement[], transformers: Transformer[]): Statement[] {
     let currentAst = statements
 
+    function visitExpression(expression: Expression) {
+
+    }
+
     function visitStatements(statements: Statement[], transformer: Transformer) {
         const dupestats = [...statements]
         dupestats.forEach((stat, i) => {
-            if (stat.type === StatementType.DoBlock) {
-                visitStatements((<Parser.DoBlock> stat).stats!, transformer)
+            // Visit statements and expressions.
+            if (
+                stat.type === StatementType.DoBlock ||-
+                stat.type === StatementType.ForGenericBlock || 
+                stat.type === StatementType.ForNumericBlock ||
+                stat.type === StatementType.RepeatBlock ||
+                stat.type === StatementType.WhileBlock
+            ) {
+                visitStatements((<Statement & { stats?: Statement[] }> stat).stats!, transformer)
+            } else if (stat.type === StatementType.FunctionDefinition || stat.type === StatementType.LocalFunctionDefinition) {
+                visitStatements((<Parser.FunctionDefinition | Parser.LocalFunctionDefinition> stat).func.stats, transformer)
+            } else if (stat.type === StatementType.IfBlock) {
+                let ifstat = <Parser.IfBlock | undefined> stat
+                while (ifstat) {
+                    visitStatements(ifstat.stats!, transformer)
+                    ifstat = ifstat.else
+                }
             }
+
             const nstat = transformer[stat.type]?.(stat, dupestats, i) ?? stat
             if (nstat) {
                 Object.assign(stat, nstat)
