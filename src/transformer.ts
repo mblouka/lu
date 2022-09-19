@@ -114,7 +114,7 @@ export function transform(statements: Statement[], transformers: Transformer[]):
         dupestats.forEach((stat, i) => {
             // Visit statements and expressions.
             if (
-                stat.type === StatementType.DoBlock ||-
+                stat.type === StatementType.DoBlock ||
                 stat.type === StatementType.ForGenericBlock || 
                 stat.type === StatementType.ForNumericBlock ||
                 stat.type === StatementType.RepeatBlock ||
