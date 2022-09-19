@@ -161,6 +161,11 @@ export function render(statement: Parser.Statement | Parser.Statement[], tabLeve
             return `${tabStr}@${intrinsicExpr}${intrinsicArgs ? `(${intrinsicArgs})` : ''}`;
         }
 
+        case Parser.StatementType.ImportStatement: {
+            const importstat = statement as Parser.ImportStatement
+            return `${tabStr}import ${importstat.default ?? `{ ${importstat.variables!.join(', ')} }`} from ${renderExpression(importstat.path)}`
+        }
+
         case Parser.StatementType.Assignment: {
             const assignment = statement as Parser.AssignmentStatement;
             return `${tabStr}${assignment.left.map(expr => renderExpression(expr)).join(', ')} = ${assignment.right.map(expr => renderExpression(expr)).join(', ')}`;

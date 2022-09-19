@@ -12,13 +12,19 @@ export type WordsUnion =
     'break' | 'do' | 'else' | 'elseif' | 'end' | 
     'false' | 'for' | 'function' | 'if' | 'export' |
     'in' | 'local' | 'nil' | 'repeat' | 'continue' |
-    'return' | 'then' | 'true' | 'until' | 'while'
+    'return' | 'then' | 'true' | 'until' | 'while' |
+
+    // Lu keywords
+    'import' | 'export' | 'from'
 
 export const Words = [
     'break', 'do', 'else', 'elseif',
     'end', 'false', 'for', 'function', 'if',
     'in', 'local', 'nil', 'not', 'repeat', 'continue',
     'return', 'then', 'true', 'until', 'while',
+
+    // Lu keywords,
+    'import', 'export', 'from'
 ];
 
 export type OperatorsUnion =

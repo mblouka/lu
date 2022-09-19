@@ -4,12 +4,11 @@ import render from './renderer'
 import { parse, purge } from './parser'
 
 // Lua 5.1 transform target.
-import { transform, transformIntoLua51, transformIntrinsics } from './transformer'
+import { transform, transformIntoLua51, transformIntrinsics, transformImports } from './transformer'
 
 const testScript = `
 
-@inject
-function abc:def() end
+import { a, b } from script.Parent.MyModule
 
 `
 
@@ -21,7 +20,7 @@ const ast = parse(tokens)
 
 // Transform the tokens using the Lua 5.1 transform target.
 //const lua51ast = transform(ast, [transformIntoLua51()])
-const postast = transform(ast, [transformIntrinsics()])
+const postast = transform(ast, [transformIntrinsics(), transformImports()])
 
 // Render and print.
 console.log(render(postast))

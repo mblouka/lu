@@ -24,6 +24,7 @@ export enum StatementType {
 
     // Lu-specific statements
     Intrinsic,
+    ImportStatement,
     
     // No statement
     Ignore
@@ -38,11 +39,11 @@ export const IgnoredStatement = <IgnoreStatement> { type: StatementType.Ignore, 
 export type ReturnExpression =
     Statement & { exprs?: Expression[] };
 export type LocalFunctionDefinition =
-    Statement & { var: string, func: Function };
+    Statement & { var: string, func: Function, exported?: boolean };
 export type FunctionDefinition =
     Statement & { into: [path: string | string[], self: boolean], func: Function };
 export type LocalAssignmentStatement = 
-    Statement & { vars: string[], assignment?: Expression[] };
+    Statement & { vars: string[], assignment?: Expression[], exported?: boolean };
 export type CompoundAssignmentStatement = 
     Statement & { left: Expression, right: Expression, op: OperatorsUnion };
 export type AssignmentStatement = 
@@ -53,8 +54,14 @@ export type BreakStatement =
     Statement;
 export type ContinueStatement =
     Statement;
+
+// Lu statements
 export type IntrinsicStatement =
     Statement & { expr: Expression, args?: Expression[] };
+export type ImportStatement =
+    Statement & { default?: string, variables?: string[], path: Expression }
+
+// Pseudo statements
 export type IgnoreStatement =
     Statement;
 
@@ -697,6 +704,38 @@ export function parse(tokens: Token[]): Statement[] {
                             vararg: vararg, 
                             stats: fblock 
                         } 
+                    }
+                }
+
+                case 'import': {
+                    i++ // skip over 'import'
+
+                    let defaultImport: string | undefined
+                    let vars: string[] | undefined
+                    if (test(TokenType.Name)) {
+                        defaultImport = <string> expect(TokenType.Name, undefined, true)
+                    } else {
+                        expect(TokenType.Operator, '{', true)
+                        vars = []
+                        while (!test(TokenType.Operator, '}')) {
+                            vars.push(<string> expect(TokenType.Name, undefined, true))
+                            if (test(TokenType.Operator, '}')) {
+                                break
+                            } else {
+                                expect(TokenType.Operator, ',', true)
+                            }
+                        }
+                        expect(TokenType.Operator, '}', true)
+                    }
+
+                    expect(TokenType.Word, 'from', true)
+
+                    return <ImportStatement> {
+                        type: StatementType.ImportStatement,
+                        line: cur.line,
+                        default: defaultImport,
+                        variables: vars,
+                        path: expression()
                     }
                 }
 

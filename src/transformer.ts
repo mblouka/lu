@@ -48,6 +48,13 @@ const t = {
         return t.atom('table', value)
     },
 
+    call(expr: Parser.Expression, args: Parser.Expression[]) {
+        return <ExpressionArith> <unknown> {
+            left: expr,
+            right: t.atom('call', args)
+        }
+    },
+
     closure(statements: Statement[], args?: string[], vararg?: boolean) {
         return t.atom('func', {
             stats: statements,
@@ -141,6 +148,43 @@ export function transformIntoLua51(): Transformer {
                     op: stat.op.substring(0, stat.op.indexOf('='))
                 } as ExpressionArith]
             } as Parser.AssignmentStatement;
+        }
+    }
+}
+
+// Transforms Lu imports into Lua 5.1-compatible imports.
+export function transformImports(): Transformer {
+    let count = 0
+    return {
+        [StatementType.ImportStatement]: (statement: Parser.Statement, block: Parser.Statement[], index: number) => {
+            const stat = statement as Parser.ImportStatement
+
+            if (stat.default) {
+                return <Parser.LocalAssignmentStatement> {
+                    line: stat.line,
+                    type: StatementType.LocalAssignment,
+                    vars: [stat.default],
+                    assignment: [t.call(t.name('require'), [stat.path])]
+                }
+            } else {
+                const store = `__import${count}`
+
+                // Add the require.
+                block.unshift(<Parser.LocalAssignmentStatement> {
+                    line: stat.line,
+                    type: StatementType.LocalAssignment,
+                    vars: [store],
+                    assignment: [t.call(t.name('require'), [stat.path])]
+                })
+
+                // Replace the statement with an assignment.
+                return <Parser.LocalAssignmentStatement> {
+                    line: stat.line,
+                    type: StatementType.LocalAssignment,
+                    vars: stat.variables!,
+                    assignment: stat.variables!.map(v => t.expression('nameIndex', t.name(store), t.name(v)))
+                }
+            }
         }
     }
 }
