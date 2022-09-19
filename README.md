@@ -4,10 +4,9 @@
 
 **`lu` strives to fix these missing conveniences first and foremost.** Every single feature added no matter how significant is always compiled down to fully valid Lua code that relies exclusively on standard runtime (5.1) functions.
 
-**`lu` also implements JSX syntax support.** This is the only "big" feature `lu` implements. This means [JSX-style](https://reactjs.org/docs/introducing-jsx.html) element composition can be written alongside Lua code and subsequently fed into libraries such as [`isu`](https://github.com/ccrpr/isu) or [Roact](https://github.com/Roblox/roact). Here's an example of such an application with `isu2` (currently unreleased), featuring JSX, attributes, and pipe anonymous functions:
+**`lu` also implements JSX syntax support.** This is the only "big" feature `lu` implements. This means [JSX-style](https://reactjs.org/docs/introducing-jsx.html) element composition can be written alongside Lua code and subsequently fed into libraries such as [`isu`](https://github.com/ccrpr/isu) or [Roact](https://github.com/Roblox/roact). Here's an example of such an application with `isu2` (currently unreleased), featuring JSX, attributes, `import` syntax, and pipe anonymous functions:
 ```lua
-local isu2 = require("isu2")
-local useState, useEvent, Component = isu2.useState, isu2.useEvent, isu2.Component
+import { useState, useEvent, Component } from 'isu2'
 
 @Component local function Counter()
     local clicks, setClicks = useState(0)
