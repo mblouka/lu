@@ -38,7 +38,7 @@ end
   - [ ] Assignments can be included in expressions. 
   - [x] Compound operators (such as `+=` and `..=`).
     - Unlike Luau, these can be part of an expression!
-  - [ ] Full-body function declarations in tables.
+  - [x] Full-body function declarations in tables.
   - [ ] `import` and `export` statements à la ES6.
 - [x] Script pre- and post- processing.
   - [x] Transformation passes for compiling `lu` syntax into Lua 5.1 syntax.
