@@ -104,7 +104,13 @@ export function renderExpression(expr: Parser.Expression | Parser.ExpressionAtom
                     return `(${renderExpression(expr.left)} ${expr.op} ${renderExpression(expr.right)})`;
                 }
             } else {
-                return `${renderExpression(expr.left)}(${((expr.right as Parser.ExpressionAtom).value as Parser.Expression[]).map(expr => renderExpression(expr)).join(', ')})`;
+                let leftValue: string | undefined
+                if ('value' in expr.left) {
+                    if (expr.left.type === 'func') {
+                        leftValue = `(${renderExpression(expr.left)})`
+                    }
+                }
+                return `${leftValue ?? renderExpression(expr.left)}(${((expr.right as Parser.ExpressionAtom).value as Parser.Expression[]).map(expr => renderExpression(expr)).join(', ')})`;
             }
         }
 

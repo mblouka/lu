@@ -1,6 +1,7 @@
-
-local someNumber = 10
-
-if someNumber += 10 > 15 then
-    print("Over 15!")
+local value = 0
+local function display (a, b)
+    local x = a + b
+    print(value, x)
 end
+
+display(value += 5, value += 10)

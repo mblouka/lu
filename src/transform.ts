@@ -233,6 +233,20 @@ const t = {
  export function transform(statements: Statement[], statementVisitor: StatementTransformCallback, exprVisitor?: ExpressionTransformCallback) {
     function visitStatements(statements: Statement[], parent?: Statement[]) {
         function visitExpression(statement: StatementTransformState, expression: Expression) {
+            if ('left' in expression) {
+                visitExpression(statement, expression.left)
+                if (expression.right) {
+                    visitExpression(statement, expression.right)
+                }
+            }
+
+            if ('value' in expression) {
+                if (expression.type === 'func') {
+                    const func = <Function> expression.value
+                    visitStatements(func.stats, statements)
+                }
+            }
+
             exprVisitor?.(new ExpressionTransformState({ block: statements, parent }, statement, expression))
         }
     
@@ -458,6 +472,40 @@ export function transformAssignmentExpressions(block: Statement[]) {
         const expr = state.expression
         if ('op' in expr && expr.op !== undefined) {
             if (moveOut.includes(expr.op)) {
+                if (expr.op === '=') {
+                    state.mutate(t.call(t.closure([
+                        <Parser.AssignmentStatement> {
+                            type: StatementType.Assignment,
+                            left: [expr.left],
+                            right: [expr.right],
+                            line: state.statement.statement.line
+                        },
+
+                        <Parser.ReturnExpression> {
+                            type: StatementType.ReturnExpression,
+                            exprs: [expr.left],
+                            line: state.statement.statement.line
+                        },
+                    ]), []))
+                } else {
+                    state.mutate(t.call(t.closure([
+                        <Parser.CompoundAssignmentStatement> {
+                            type: StatementType.CompoundAssignment,
+                            left: expr.left,
+                            right: expr.right,
+                            op: expr.op,
+                            line: state.statement.statement.line
+                        },
+
+                        <Parser.ReturnExpression> {
+                            type: StatementType.ReturnExpression,
+                            exprs: [expr.left],
+                            line: state.statement.statement.line
+                        },
+                    ]), []))
+                }
+
+                /*
                 // Move the assignment above the call.
                 if (expr.op === '=') {
                     state.statement.insertBefore(<Parser.AssignmentStatement> {
@@ -477,6 +525,7 @@ export function transformAssignmentExpressions(block: Statement[]) {
                 }
                 // Replace the expression with the assignment value
                 state.mutate(expr.left)
+                */
             }
         }
     })
