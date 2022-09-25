@@ -136,7 +136,7 @@ export const ExprOpPrecedence: Partial<{ [k in OperatorsUnion | string]: number 
     '*': 6, '/': 6,
     '+': 5, '-': 5,
     '..': 4,
-    '<': 3, '>': 3, '<=': 3, '>=': 3, '~=': 3, '==': 3, '@': 3,
+    '<': 3, '>': 3, '<=': 3, '>=': 3, '~=': 3, '==': 3, '@': 3, '=': 3,
     'and': 2,
     'or': 1
 }
@@ -410,13 +410,16 @@ export function parse(tokens: Token[]): Statement[] {
         return [path, false]
     }
 
-    function expression(minimumPrecedence = 1, disableCalls?: boolean): Expression {
+    function expression(minimumPrecedence = 1, disableCalls?: boolean, disableExpressionAssignment?: boolean): Expression {
         let lhs = atom()
 
         const notOperators = [
-            '{', '}', '[', ']', '(', ')', '=', ',', ';',
-            '+=', '-=', '*=', '/=', '%=', '^=', '..=', '@', '|'
+            '{', '}', '[', ']', '(', ')', ',', ';', '@', '|'
         ];
+
+        if (disableExpressionAssignment) {
+            notOperators.push('=', '+=', '-=', '*=', '/=', '%=', '^=', '..=')
+        }
 
         while (true) {
             let cur = tokens[i]
@@ -819,7 +822,7 @@ export function parse(tokens: Token[]): Statement[] {
                 }
             }
 
-            const firstExpr = expression(1, true) // guaranteed expression
+            const firstExpr = expression(1, true, true) // guaranteed expression
 
             if (testNext(TokenType.Operator, '(')) {
                 // function call

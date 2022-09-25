@@ -1,6 +1,8 @@
 
-local function myComponent()
-    return <Component a b={2+3}>
-        <bruhComponent/>
-    </Component>
+local function add(a, b)
+    return a + b
 end
+
+local value = 3
+value += 50
+add(value += 5, 10)

@@ -8,6 +8,7 @@ import {
     transformImports,
     transformCompounds,
     transformElementConstructors,
+    transformAssignmentExpressions,
 } from './transform'
 
 import { lex } from './lexer'
@@ -89,6 +90,7 @@ export function make(instance: LuProjectInstance) {
         const tokens = parse(purge(lex(fileContents)))
 
         // Do transforms.
+        transformAssignmentExpressions(tokens)
         transformCompounds(tokens)
         transformImports(tokens)
         transformIntrinsics(tokens)

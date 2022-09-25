@@ -55,7 +55,7 @@ export class StatementTransformState extends TransformState {
      * Insert a statement before this one.
      */
     insertBefore(newStatement: Statement) {
-        this.block.splice(this._index - 1, 0, newStatement)
+        this.block.splice(this._index, 0, newStatement)
         this._index += 1
     }
 
@@ -86,12 +86,20 @@ export class StatementTransformState extends TransformState {
 export type ExpressionTransformCallback = (state: ExpressionTransformState) => void
 export class ExpressionTransformState extends TransformState {
     private _expr: Expression
+    private _stat: StatementTransformState
 
     /**
      * Get the current expression.
      */
     get expression() {
         return this._expr
+    }
+
+    /**
+     * Get the statement transform state in which the expression is located.
+     */
+    get statement() {
+        return this._stat
     }
 
     /**
@@ -123,8 +131,9 @@ export class ExpressionTransformState extends TransformState {
         Object.assign(exprAsObject, newExpression)
     }
 
-    constructor(options: TransformStateConstructorOptions, expr: Expression) {
+    constructor(options: TransformStateConstructorOptions, stat: StatementTransformState, expr: Expression) {
         super(options)
+        this._stat = stat
         this._expr = expr
     }
 }
@@ -223,12 +232,13 @@ const t = {
  */
  export function transform(statements: Statement[], statementVisitor: StatementTransformCallback, exprVisitor?: ExpressionTransformCallback) {
     function visitStatements(statements: Statement[], parent?: Statement[]) {
-        function visitExpression(expression: Expression) {
-            exprVisitor?.(new ExpressionTransformState({ block: statements, parent }, expression))
+        function visitExpression(statement: StatementTransformState, expression: Expression) {
+            exprVisitor?.(new ExpressionTransformState({ block: statements, parent }, statement, expression))
         }
     
         statements.forEach((stat, i) => {
             // Visit statements and expressions.
+            const transformState = new StatementTransformState({ block: statements, parent }, i)
             if (
                 stat.type === StatementType.DoBlock ||
                 stat.type === StatementType.ForGenericBlock || 
@@ -243,20 +253,20 @@ const t = {
                 let ifstat = <Parser.IfBlock | undefined> stat
                 while (ifstat) {
                     if (ifstat.condition) {
-                        visitExpression(ifstat.condition)
+                        visitExpression(transformState, ifstat.condition)
                     }
                     visitStatements(ifstat.stats!, statements)
                     ifstat = ifstat.else
                 }
             } else if (stat.type === StatementType.FunctionCall) {
                 const funcstat = <Parser.FunctionCall> stat
-                visitExpression(funcstat.expr)
-                funcstat.args?.forEach(visitExpression)
+                visitExpression(transformState, funcstat.expr)
+                funcstat.args?.forEach(arg => visitExpression(transformState, arg))
             } else if (stat.type === StatementType.ReturnExpression) {
                 const returnstat = <Parser.ReturnExpression> stat
-                returnstat.exprs?.forEach(visitExpression)
+                returnstat.exprs?.forEach(expr => visitExpression(transformState, expr))
             }
-            statementVisitor(new StatementTransformState({ block: statements, parent }, i))
+            statementVisitor(transformState)
         })
     }
 
@@ -437,6 +447,37 @@ export function transformIntrinsics(block: Statement[]) {
 
             // Remove intrinsic.
             state.remove()
+        }
+    })
+}
+
+// Move assignment expressions out of their expressions and into a statement.
+const moveOut = <OperatorsUnion[]> ['=', '+=', '-=', '*=', '/=', '^=', '%=', '..=']
+export function transformAssignmentExpressions(block: Statement[]) {
+    transform(block, _=>{}, state => {
+        const expr = state.expression
+        if ('op' in expr && expr.op !== undefined) {
+            if (moveOut.includes(expr.op)) {
+                // Move the assignment above the call.
+                if (expr.op === '=') {
+                    state.statement.insertBefore(<Parser.AssignmentStatement> {
+                        type: StatementType.Assignment,
+                        left: [expr.left],
+                        right: [expr.right],
+                        line: state.statement.statement.line
+                    })
+                } else {
+                    state.statement.insertBefore(<Parser.CompoundAssignmentStatement> {
+                        type: StatementType.CompoundAssignment,
+                        left: expr.left,
+                        right: expr.right,
+                        op: expr.op,
+                        line: state.statement.statement.line
+                    })
+                }
+                // Replace the expression with the assignment value
+                state.mutate(expr.left)
+            }
         }
     })
 }

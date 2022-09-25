@@ -34,7 +34,7 @@ end
 - [x] Minor QoL extensions to the Lua syntax that doesn't take too much effort to compile down to Lua.
   - [x] Reflective variable and function decorators through the `@decorator` and `@decorator(...)` syntax.
   - [x] Single-expression anonymous functions through Ruby-like pipe operators.
-  - [ ] Assignments can be included in expressions. 
+  - [x] Assignments can be included in expressions. 
   - [x] Compound operators (such as `+=` and `..=`).
     - Unlike Luau, these can be part of an expression!
   - [x] Full-body function declarations in tables.
