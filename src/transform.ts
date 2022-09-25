@@ -3,11 +3,114 @@ import { OperatorsUnion } from './lexer';
 import * as Parser from './parser';
 import { Expression, ExpressionArith, ExpressionAtom, Statement, StatementType, IgnoredStatement, Function } from './parser';
 
-type TransformCallback = (stat: Statement, block: Statement[], index: number) => any | undefined;
-export type Transformer = Partial<Record<StatementType, TransformCallback>>
+export interface TransformStateConstructorOptions {
+    block: Statement[]
+    parent?: Statement[]
+}
 
-export interface TransformState {
+export class TransformState {
+    /**
+     * Block currently being transformed.
+     */
+    readonly block: Statement[]
 
+    /**
+     * Parent of block.
+     */
+    readonly parent?: Statement[]
+
+    constructor(options: TransformStateConstructorOptions) {
+        this.block = options.block
+        this.parent = options.parent
+    }
+}
+
+export type StatementTransformCallback = (state: StatementTransformState) => void
+export class StatementTransformState extends TransformState {
+    private _index: number
+    private _statement: Statement
+    
+    /**
+     * Get the current statement.
+     */
+    get statement() {
+        return this._statement
+    }
+
+    /**
+     * Replace the current statement.
+     */
+    mutate(newStatement: Statement) {
+        this.block.splice(this._index, 1, newStatement)
+    }
+
+    /**
+     * Insert a statement after this one.
+     */
+    insertAfter(newStatement: Statement) {
+        this.block.splice(this._index + 1, 0, newStatement)
+    }
+
+    /**
+     * Insert a statement before this one.
+     */
+    insertBefore(newStatement: Statement) {
+        this.block.splice(this._index - 1, 0, newStatement)
+        this._index += 1
+    }
+
+    /**
+     * Remove the current statement.
+     */
+    remove() {
+        this.block.splice(this._index, 1)
+        this._index = -1
+    }
+
+    /**
+     * Get the next statement.
+     */
+    next() {
+        return new StatementTransformState({ 
+            block: this.block, parent: this.parent 
+        }, this._index + 1)
+    }
+
+    constructor(options: TransformStateConstructorOptions, index: number) {
+        super(options)
+        this._index = index
+        this._statement = this.block[index]
+    }
+}
+
+export type ExpressionTransformCallback = (state: ExpressionTransformState) => void
+export class ExpressionTransformState extends TransformState {
+    private _expr: Expression
+
+    /**
+     * Get the current expression.
+     */
+    get expression() {
+        return this._expr
+    }
+
+    /**
+     * Replace the current expression.
+     */
+    mutate(newExpression: Expression) {
+        const exprAsObject = <any> this._expr
+        for (var variableKey in exprAsObject) {
+            if (exprAsObject.hasOwnProperty(variableKey)) {
+                delete exprAsObject[variableKey]
+            }
+        }
+        Object.assign(exprAsObject, newExpression)
+    }
+
+    constructor(options: TransformStateConstructorOptions, expr: Expression) {
+        super(options)
+        this._expr = expr
+    }
 }
 
 /**
@@ -102,16 +205,17 @@ const t = {
 /**
  * Apply transformations to a given list of statements.
  */
-export function transform(statements: Statement[], transformers: Transformer[]): Statement[] {
-    let currentAst = statements
-
-    function visitExpression(expression: Expression) {
-
+ export function transform(statements: Statement[], statementVisitor: StatementTransformCallback, exprVisitor?: ExpressionTransformCallback) {
+    if (exprVisitor === undefined) {
+        exprVisitor = state => {}
     }
 
-    function visitStatements(statements: Statement[], transformer: Transformer) {
-        const dupestats = [...statements]
-        dupestats.forEach((stat, i) => {
+    function visitStatements(statements: Statement[], parent?: Statement[]) {
+        function visitExpression(expression: Expression) {
+            exprVisitor!(new ExpressionTransformState({ block: statements, parent }, expression))
+        }
+    
+        statements.forEach((stat, i) => {
             // Visit statements and expressions.
             if (
                 stat.type === StatementType.DoBlock ||
@@ -120,45 +224,34 @@ export function transform(statements: Statement[], transformers: Transformer[]):
                 stat.type === StatementType.RepeatBlock ||
                 stat.type === StatementType.WhileBlock
             ) {
-                visitStatements((<Statement & { stats?: Statement[] }> stat).stats!, transformer)
+                visitStatements((<Statement & { stats?: Statement[] }> stat).stats!, statements)
             } else if (stat.type === StatementType.FunctionDefinition || stat.type === StatementType.LocalFunctionDefinition) {
-                visitStatements((<Parser.FunctionDefinition | Parser.LocalFunctionDefinition> stat).func.stats, transformer)
+                visitStatements((<Parser.FunctionDefinition | Parser.LocalFunctionDefinition> stat).func.stats, statements)
             } else if (stat.type === StatementType.IfBlock) {
                 let ifstat = <Parser.IfBlock | undefined> stat
                 while (ifstat) {
-                    visitStatements(ifstat.stats!, transformer)
+                    if (ifstat.condition) {
+                        visitExpression(ifstat.condition)
+                    }
+                    visitStatements(ifstat.stats!, statements)
                     ifstat = ifstat.else
                 }
             }
-
-            const nstat = transformer[stat.type]?.(stat, dupestats, i) ?? stat
-            if (nstat) {
-                Object.assign(stat, nstat)
-            }
+            statementVisitor(new StatementTransformState({ block: statements, parent }, i))
         })
-        return dupestats
     }
 
-    for (const transformer of transformers) {
-        // Visit statements.
-        currentAst = visitStatements(currentAst, transformer)
-    }
-
-    return currentAst
+    visitStatements(statements)
 }
 
-// Minify an AST.
-export function minify(): Transformer {
-    return {}
-}
+/** ====================== DEFAULT TRANSFORMS **/
 
 // Transforms Lu compound operations.
-export function transformCompounds(): Transformer {
-    return {
-        // Transform Luau compound assignments into Lua-compatible assignments.
-        [StatementType.CompoundAssignment]: (statement: Parser.Statement, _, __) => {
-            const stat = statement as Parser.CompoundAssignmentStatement
-            return {
+export function transformCompounds(block: Statement[]) {
+    transform(block, state => {
+        if (state.statement.type === StatementType.CompoundAssignment) {
+            const stat = <Parser.CompoundAssignmentStatement> state.statement
+            state.mutate(<Parser.AssignmentStatement> {
                 type: StatementType.Assignment,
                 line: stat.line,
                 left: [stat.left],
@@ -167,30 +260,30 @@ export function transformCompounds(): Transformer {
                     right: stat.right,
                     op: stat.op.substring(0, stat.op.indexOf('='))
                 } as ExpressionArith]
-            } as Parser.AssignmentStatement;
+            })
         }
-    }
+    })
 }
 
 // Transforms Lu imports into Lua 5.1-compatible imports.
-export function transformImports(): Transformer {
+export function transformImports(block: Statement[]) {
     let count = 0
-    return {
-        [StatementType.ImportStatement]: (statement: Parser.Statement, block: Parser.Statement[], index: number) => {
-            const stat = statement as Parser.ImportStatement
 
+    transform(block, state => {
+        if (state.statement.type === StatementType.ImportStatement) {
+            const stat = <Parser.ImportStatement> state.statement
             if (stat.default) {
-                return <Parser.LocalAssignmentStatement> {
+                state.mutate(<Parser.LocalAssignmentStatement> {
                     line: stat.line,
                     type: StatementType.LocalAssignment,
                     vars: [stat.default],
                     assignment: [t.call(t.name('require'), [stat.path])]
-                }
+                })
             } else {
                 const store = `__import${count++}`
 
                 // Add the require.
-                block.unshift(<Parser.LocalAssignmentStatement> {
+                state.insertBefore(<Parser.LocalAssignmentStatement> {
                     line: stat.line,
                     type: StatementType.LocalAssignment,
                     vars: [store],
@@ -198,26 +291,26 @@ export function transformImports(): Transformer {
                 })
 
                 // Replace the statement with an assignment.
-                return <Parser.LocalAssignmentStatement> {
+                state.mutate(<Parser.LocalAssignmentStatement> {
                     line: stat.line,
                     type: StatementType.LocalAssignment,
                     vars: stat.variables!,
                     assignment: stat.variables!.map(v => t.expression('nameIndex', t.name(store), t.name(v)))
-                }
+                })
             }
         }
-    }
+    })
 }
 
 // Transforms Lu intrinsics into Lua 5.1-compatible calls.
-export function transformIntrinsics(): Transformer {
-    return {
-        [StatementType.Intrinsic]: (statement: Parser.Statement, block: Parser.Statement[], index: number) => {
-            const stat = statement as Parser.IntrinsicStatement
-            const nextstat = block[index + 1]
+export function transformIntrinsics(block: Statement[]) {
+    transform(block, state => {
+        if (state.statement.type === StatementType.Intrinsic) {
+            const stat = <Parser.IntrinsicStatement> state.statement
+            const next = state.next()
 
-            if (nextstat.type === StatementType.LocalAssignment) {
-                const localstat = nextstat as Parser.LocalAssignmentStatement
+            if (next.statement.type === StatementType.LocalAssignment) {
+                const localstat = <Parser.LocalAssignmentStatement> next.statement
 
                 // Build local descriptors.
                 const localDescriptors: Parser.TableConstructor[] = []
@@ -229,7 +322,7 @@ export function transformIntrinsics(): Transformer {
                         get: t.closure([
                             <Parser.ReturnExpression> {
                                 type: StatementType.ReturnExpression,
-                                line: nextstat.line,
+                                line: localstat.line,
                                 exprs: [ t.name(variable) ]
                             }
                         ]),
@@ -238,7 +331,7 @@ export function transformIntrinsics(): Transformer {
                         set: t.closure([
                             <Parser.AssignmentStatement> {
                                 type: StatementType.Assignment,
-                                line: nextstat.line,
+                                line: localstat.line,
                                 left: [ t.name(variable) ],
                                 right: [ t.name('v') ],
                             }
@@ -246,15 +339,14 @@ export function transformIntrinsics(): Transformer {
                     }))
                 }
 
-                block.splice(index + 2, 0, <Statement> {
+                next.insertAfter(<Statement> {
                     type: StatementType.FunctionCall,
                     line: stat.line,
                     expr: stat.expr,
                     args: (stat.args ?? []).concat(localDescriptors.map(v => t.table(v)))
                 })
-
-            } else if (nextstat.type === StatementType.FunctionDefinition) {
-                const funcstat = nextstat as Parser.FunctionDefinition
+            } else if (next.statement.type === StatementType.FunctionDefinition) {
+                const funcstat = <Parser.FunctionDefinition> next.statement
 
                 // Convert funcpath into expression.
                 const funcpath = funcstat.into
@@ -288,7 +380,7 @@ export function transformIntrinsics(): Transformer {
                     funcstat.func.args.unshift('self')
                 }
 
-                block.splice(index + 1, 1, <Statement> <Parser.AssignmentStatement> {
+                next.mutate(<Statement> <Parser.AssignmentStatement> {
                     type: StatementType.Assignment,
                     line: stat.line,
                     left: [expr],
@@ -300,10 +392,10 @@ export function transformIntrinsics(): Transformer {
                         ) }
                     }]
                 })
-            } else if (nextstat.type === StatementType.LocalFunctionDefinition) {
-                const funcstat = nextstat as Parser.LocalFunctionDefinition
+            } else if (next.statement.type === StatementType.LocalFunctionDefinition) {
+                const funcstat = <Parser.LocalFunctionDefinition> next.statement
 
-                block.splice(index + 1, 1, <Statement> <Parser.AssignmentStatement> {
+                next.mutate(<Statement> <Parser.AssignmentStatement> {
                     type: StatementType.Assignment,
                     line: stat.line,
                     left: [t.name(funcstat.var)],
@@ -316,16 +408,16 @@ export function transformIntrinsics(): Transformer {
                     }]
                 })
 
-                return <Parser.LocalAssignmentStatement> {
+                // Replace with local assignment.
+                return state.mutate(<Parser.LocalAssignmentStatement> {
                     type: StatementType.LocalAssignment,
                     line: stat.line,
                     vars: [funcstat.var]
-                }
+                })
             }
 
-            return IgnoredStatement
+            // Remove intrinsic.
+            state.remove()
         }
-    }
+    })
 }
-
-export default transform

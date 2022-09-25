@@ -6,8 +6,8 @@ import {
     transform,
     transformIntrinsics,
     transformImports,
-    transformCompounds
-} from './transformer'
+    transformCompounds,
+} from './transform'
 
 import { lex } from './lexer'
 import { render } from './renderer'
@@ -85,9 +85,14 @@ export function project(root: string) {
 
 export function make(instance: LuProjectInstance) {
     function transformFile(fileContents: string, filePath: string) {
-        return render(transform(parse(purge(lex(fileContents))), [
-            transformCompounds(), transformImports(), transformIntrinsics()
-        ]))
+        const tokens = parse(purge(lex(fileContents)))
+
+        // Do transforms.
+        transformCompounds(tokens)
+        transformImports(tokens)
+        transformIntrinsics(tokens)
+
+        return render(tokens)
     }
 
     // Todo: trace 'require' calls after expression visitation is impl.
