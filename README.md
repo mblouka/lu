@@ -43,7 +43,7 @@ end
   - [x] Transformation passes for compiling `lu` syntax into Lua 5.1 syntax.
   - [ ] Macros through the `!` designator.
   - [ ] Passthrough Luau support, meaning Luau syntax is supported but not considered during compilation.
-  - [ ] Roll-up of `import` and `require` statements (bundling).
+  - [x] Roll-up of `import` and `require` statements (bundling).
 - [ ] Language server for integration with IDEs based on [`luau-lsp`](https://github.com/JohnnyMorganz/luau-lsp).
   - [ ] Visual Studio Code extension. This will be prioritized.
 - [x] Compilation options setup through a `luconfig.json` file.
