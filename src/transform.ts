@@ -1,7 +1,7 @@
 
-import { OperatorsUnion } from './lexer';
-import * as Parser from './parser';
-import { Expression, ExpressionArith, ExpressionAtom, Statement, StatementType, IgnoredStatement, Function } from './parser';
+import { OperatorsUnion } from './lexer.js';
+import * as Parser from './parser.js';
+import { Expression, ExpressionArith, ExpressionAtom, Statement, StatementType, IgnoredStatement, Function } from './parser.js';
 
 export interface TransformStateConstructorOptions {
     block: Statement[]

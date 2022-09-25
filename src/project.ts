@@ -10,11 +10,12 @@ import {
     transformElementConstructors,
     transformAssignmentExpressions,
     t
-} from './transform'
+} from './transform.js'
 
-import { lex } from './lexer'
-import { render } from './renderer'
-import { Expression, ExpressionAtom, LocalAssignmentStatement, parse, purge, Statement, StatementType, IfBlock, ReturnExpression, ExpressionArith, AssignmentStatement } from './parser'
+import { lex } from './lexer.js'
+import { render } from './renderer.js'
+import { Expression, ExpressionAtom, LocalAssignmentStatement, parse, purge, Statement, StatementType, IfBlock, ReturnExpression, ExpressionArith, AssignmentStatement } from './parser.js'
+import ora, { Ora } from 'ora'
 
 export interface LuProject {
     /**
@@ -49,6 +50,11 @@ export interface LuProject {
      * Name of the jsx constructor. Defaults to `h`.
      */
     jsxConstructor?: string
+
+    /**
+     * Modules guaranteed to exist at runtime.
+     */
+    modules?: string[]
 }
 
 export interface LuProjectInstance {
@@ -86,7 +92,22 @@ export function project(root: string) {
     }
 }
 
-export function make(instance: LuProjectInstance) {
+export interface Notices {
+    readonly severity: 'info' | 'warning',
+    readonly text: string
+}
+
+export function make(ora: Ora, instance: LuProjectInstance): Notices[] {
+    const notices = <Notices[]> []
+
+    function warn(contents: string) {
+        notices.push({ severity: 'warning', text: contents })
+    }
+
+    function info(contents: string) {
+        notices.push({ severity: 'info', text: contents })
+    }
+
     function doTransforms(fileContents: string, filePath: string) {
         const tokens = parse(purge(lex(fileContents)))
 
@@ -107,7 +128,7 @@ export function make(instance: LuProjectInstance) {
     // Find the entry point.
     const entryPath = path.join(instance.root, instance.config.entrypoint)
 
-    function traceRequires(block: Statement[]): Record<string, string> {
+    function traceRequires(from: string, block: Statement[]): Record<string, string> {
         const filemap = <Record<string, string>> {}
         transform(block, _=>{}, expr => {
             const expression = expr.expression
@@ -128,6 +149,8 @@ export function make(instance: LuProjectInstance) {
                             filemap[requirePath] = fs.realpathSync(attemptMapLu)
                         } else if (fs.existsSync(attemptMapLua)) {
                             filemap[requirePath] = fs.realpathSync(attemptMapLua)
+                        } else if (instance.config.modules?.find(m => m === requirePath) === undefined) {
+                            warn(`Module "${requirePath}" not found (required from "${from}"). If this module is guaranteed to exist at runtime, please add it to "modules" in your luconfig.json.`)
                         }
                     }
                 }
@@ -154,7 +177,7 @@ export function make(instance: LuProjectInstance) {
                 entrypointTransformed = transformed
             }
 
-            const imports = traceRequires(transformed)
+            const imports = traceRequires(next, transformed)
             if (Object.keys(imports).length > 0) {
                 for (const [importName, importPath] of Object.entries(imports)) {
                     if (!globalRequireMap[importName]) {
@@ -169,6 +192,7 @@ export function make(instance: LuProjectInstance) {
     // Bundle if requested.
     if (instance.config.bundle && Object.keys(globalRequireMap).length > 0) {
         // Create inline import table.
+        ora.text = 'Bundling'
         const importFunctions = new Map<number | Expression, Expression>()
         for (const [importName, importPath] of Object.entries(globalRequireMap)) {
             const importStats = globalTransformed[importPath]
@@ -276,6 +300,7 @@ export function make(instance: LuProjectInstance) {
         // Write to outfile and return.
         const outFile = path.join(instance.root, instance.config.outFile!)
         fs.writeFileSync(outFile, render(entrypointTransformed), 'utf-8')
-        return
     }
+
+    return notices
 }

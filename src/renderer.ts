@@ -1,5 +1,5 @@
 
-import * as Parser from './parser'
+import * as Parser from './parser.js'
 
 const tabChar = '  ';
 

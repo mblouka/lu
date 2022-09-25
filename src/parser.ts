@@ -2,7 +2,7 @@
 
 // Necessary for loading in transformers.
 
-import { TokenType, Token, TokenValue, WordsUnion, OperatorsUnion } from './lexer';
+import { TokenType, Token, TokenValue, WordsUnion, OperatorsUnion } from './lexer.js';
 
 export enum StatementType {
     Constructor,

@@ -1,15 +1,36 @@
 #!/usr/bin/env node
 
 import path from 'path'
-import { project, make, LuProjectInstance } from './project'
+import { format } from 'util'
+import ora, { Ora } from 'ora'
+import { project, make, LuProjectInstance } from './project.js'
 
 async function main(args: string[]) {
+    // Replace methods with pretty prints.
+    const oldLog = console.log
+    console.log = (fmt: string, ...args: any[]) => {
+        oldLog(`💬 ${format(fmt, ...args)}`)
+    }
+
+    const oldWarn = console.warn
+    console.warn = (fmt: string, ...args: any[]) => {
+        oldWarn(`⚠️ ${format(fmt, ...args)}`)
+    }
+
+    const oldError = console.error
+    console.error = (fmt: string, ...args: any[]) => {
+        oldError(`⛔ ${format(fmt, ...args)}`)
+    }
+
+    console.log('lu @https://github.com/ccrpr/lu')
+
     const passedPath = args.shift()
     if (!passedPath) {
-        console.error('Arguments are missing!')
+        console.error('A project or file path must be provided. To enter repl, pass "--repl".')
         return
     }
 
+    let process: Ora
     let proj: LuProjectInstance
     if (passedPath.endsWith('.lua') || passedPath.endsWith('.lu')) {
         // Create a virtual project. Second argument is outfile.
@@ -31,8 +52,20 @@ async function main(args: string[]) {
         proj = project(passedPath)
     }
 
+    process = ora(`Processing project at "${passedPath}"`)
+    process.start()
+
     // Make the project.
-    make(proj)
+    const notices = make(process, proj)
+
+    if (notices.length === 0) {
+        process.succeed('Complete!')
+    } else {
+        process.succeed(`Complete, with ${notices.length === 1 ? '1 notice' : `${notices.length} notices`}:`)
+        notices.forEach(notice => {
+            notice.severity === 'info' ? console.log(notice.text) : console.warn(notice.text)
+        })
+    }
 }
 
 main(process.argv.splice(2))

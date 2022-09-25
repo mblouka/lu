@@ -2,7 +2,7 @@
   "name": "lu",
   "version": "1.0.0",
   "description": "lu is an extended syntax for Lua that adds many QoL features and support for JSX.",
-  "main": "./dist/main.js",
+  "type": "module",
   "scripts": {
     "build": "tsc",
     "dev": "tsc --watch"
@@ -24,6 +24,7 @@
   "dependencies": {
     "@types/node": "^18.7.18",
     "esbuild": "^0.15.8",
+    "ora": "^6.1.2",
     "typescript": "^4.8.3"
   }
 }

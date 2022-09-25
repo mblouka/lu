@@ -30,4 +30,5 @@ local require = function(input)
   end
 local __import0 = require("src/test-import")
 local add, mul = __import0.add, __import0.mul
+local ffi = require("ffi")
 print((add(1, 3) + mul(2, 5)))
