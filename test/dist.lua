@@ -1,7 +1,4 @@
-local function add(a, b)
-  return (a + b)
+local someNumber = 10
+if ((someNumber += 10) > 15) then
+  print("Over 15!")
 end
-local value = 3
-value = (value + 50)
-value = (value + 5)
-add(value, 10)
