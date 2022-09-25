@@ -1,5 +1,6 @@
 {
     "name": "Test Project",
     "entrypoint": "./src/init.lu",
-    "outFile": "dist.lua"
+    "outFile": "dist.lua",
+    "jsxConstructor": "Roact.createElement"
 }

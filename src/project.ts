@@ -7,6 +7,7 @@ import {
     transformIntrinsics,
     transformImports,
     transformCompounds,
+    transformElementConstructors,
 } from './transform'
 
 import { lex } from './lexer'
@@ -91,6 +92,7 @@ export function make(instance: LuProjectInstance) {
         transformCompounds(tokens)
         transformImports(tokens)
         transformIntrinsics(tokens)
+        transformElementConstructors(tokens, instance.config.jsxConstructor)
 
         return render(tokens)
     }

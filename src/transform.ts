@@ -95,6 +95,22 @@ export class ExpressionTransformState extends TransformState {
     }
 
     /**
+     * Iterate over atoms.
+     */
+    forEachAtom(callback: (atom: ExpressionAtom) => void, thisAtom?: Expression) {
+        const select = thisAtom ?? this._expr
+        if ('value' in select) {
+            callback(select)
+        } else {
+            const expr = <ExpressionArith> select
+            this.forEachAtom(callback, expr.left)
+            if (expr.right) {
+                this.forEachAtom(callback, expr.right)
+            }
+        }
+    }
+
+    /**
      * Replace the current expression.
      */
     mutate(newExpression: Expression) {
@@ -114,7 +130,7 @@ export class ExpressionTransformState extends TransformState {
 }
 
 /**
- * Helper constructors for some things.
+ * Helper constructors.
  */
 const t = {
     expression(op: OperatorsUnion | { op: OperatorsUnion, unary: boolean }, left: Expression, right?: Expression) {
@@ -206,13 +222,9 @@ const t = {
  * Apply transformations to a given list of statements.
  */
  export function transform(statements: Statement[], statementVisitor: StatementTransformCallback, exprVisitor?: ExpressionTransformCallback) {
-    if (exprVisitor === undefined) {
-        exprVisitor = state => {}
-    }
-
     function visitStatements(statements: Statement[], parent?: Statement[]) {
         function visitExpression(expression: Expression) {
-            exprVisitor!(new ExpressionTransformState({ block: statements, parent }, expression))
+            exprVisitor?.(new ExpressionTransformState({ block: statements, parent }, expression))
         }
     
         statements.forEach((stat, i) => {
@@ -236,6 +248,13 @@ const t = {
                     visitStatements(ifstat.stats!, statements)
                     ifstat = ifstat.else
                 }
+            } else if (stat.type === StatementType.FunctionCall) {
+                const funcstat = <Parser.FunctionCall> stat
+                visitExpression(funcstat.expr)
+                funcstat.args?.forEach(visitExpression)
+            } else if (stat.type === StatementType.ReturnExpression) {
+                const returnstat = <Parser.ReturnExpression> stat
+                returnstat.exprs?.forEach(visitExpression)
             }
             statementVisitor(new StatementTransformState({ block: statements, parent }, i))
         })
@@ -419,5 +438,43 @@ export function transformIntrinsics(block: Statement[]) {
             // Remove intrinsic.
             state.remove()
         }
+    })
+}
+
+// Transform element constructors into function calls.
+export function transformElementConstructors(block: Statement[], constructor = 'h') {
+    function createCallFor(elem: Parser.ElementConstructor) {
+        let elemSource: Expression // Can either be a string literal or a name.
+        if (elem.name.substring(0,1) === elem.name.toLowerCase().substring(0,1)) {
+            // Assume string value.
+            elemSource = t.string(elem.name)
+        } else {
+            // Assume function value.
+            elemSource = t.name(elem.name)
+        }
+
+        // Convert children, if any.
+        const childrenMap = new Map<number | Parser.Expression, Parser.Expression>()
+        elem.children?.forEach((child, i) => {
+            if ('value' in child) {
+                if (child.type === 'element') {
+                    childrenMap.set(t.string(`_${i}`), createCallFor(<Parser.ElementConstructor> child.value))
+                }
+            }
+        })
+
+        return t.call(t.name(constructor), [
+            elemSource, t.table(t.object(elem.properties)), t.table(childrenMap)
+        ])
+    }
+
+    transform(block, _=>{}, state => {
+        state.forEachAtom(atom => {
+            if (atom.type === 'element') {
+                const callfor = createCallFor(<Parser.ElementConstructor> atom.value)
+                Object.assign(atom, callfor)
+                delete atom['value']
+            }
+        })
     })
 }
