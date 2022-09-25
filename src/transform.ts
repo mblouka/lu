@@ -141,7 +141,7 @@ export class ExpressionTransformState extends TransformState {
 /**
  * Helper constructors.
  */
-const t = {
+export const t = {
     expression(op: OperatorsUnion | { op: OperatorsUnion, unary: boolean }, left: Expression, right?: Expression) {
         return <ExpressionArith> {
             left, right, op: typeof op === 'string' ? op : op.op, unary: typeof op === 'string' ? false : op.unary
@@ -189,6 +189,38 @@ const t = {
             args: args ?? [],
             vararg: vararg ?? false
         })
+    },
+
+    array(values: (ExpressionAtom['value'] | Expression)[]) {
+        const tbl = new Map<number | Parser.Expression, Parser.Expression>()
+        let index = 0
+        for (const v of values) {
+            let value: Expression
+            if (typeof v === 'string') {
+                value = t.string(v)
+            } else if (typeof v === 'number') {
+                value = t.number(v)
+            } else if (typeof v === 'boolean') {
+                value = t.boolean(v)
+            } else if (typeof v === 'undefined') {
+                value = t.nil()
+            } else {
+                if ('type' in v || 'op' in v || 'right' in v) {
+                    value = v
+                } else if ('stats' in v) {
+                    value = { type: 'func', value: v }
+                } else if ('properties' in v) {
+                    value = { type: 'element', value: v }
+                } else if (v instanceof Map) {
+                    value = { type: 'table', value: v }
+                } else {
+                    value = t.table(t.object(<Record<string | number, ExpressionAtom['value'] | Expression>> <unknown> v))
+                }
+            }
+
+            tbl.set(index++, value)
+        }
+        return tbl
     },
 
     object(value: Record<string | number, ExpressionAtom['value'] | Expression>) {
@@ -279,6 +311,13 @@ const t = {
             } else if (stat.type === StatementType.ReturnExpression) {
                 const returnstat = <Parser.ReturnExpression> stat
                 returnstat.exprs?.forEach(expr => visitExpression(transformState, expr))
+            } else if (stat.type === StatementType.Assignment) {
+                const assignstat = <Parser.AssignmentStatement> stat
+                assignstat.left.forEach(expr => visitExpression(transformState, expr))
+                assignstat.right.forEach(expr => visitExpression(transformState, expr))
+            } else if (stat.type === StatementType.LocalAssignment) {
+                const assignstat = <Parser.LocalAssignmentStatement> stat
+                assignstat.assignment?.forEach(expr => visitExpression(transformState, expr))
             }
             statementVisitor(transformState)
         })

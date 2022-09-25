@@ -31,7 +31,7 @@ export function renderExpression(expr: Parser.Expression | Parser.ExpressionAtom
             return `(${(expr.value as Parser.Expression[]).map(expr => renderExpression(expr, tabLevel)).join(', ')})`;
         } else if (expr.type === 'func') { // dear god
             const func = expr.value as Parser.Function;
-            return renderFunction(tabLevel, func.args, func.vararg,func.stats);
+            return renderFunction(tabLevel, func.args, func.vararg, func.stats);
         } else if (expr.type === 'string') {
             return `"${expr.value as string}"`;
         } else  if (expr.type === 'element') {
