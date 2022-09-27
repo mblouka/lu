@@ -2,20 +2,15 @@
 import fs from 'fs'
 import path from 'path'
 
-import {
-    transform,
-    transformIntrinsics,
-    transformImports,
-    transformCompounds,
-    transformElementConstructors,
-    transformAssignmentExpressions,
-    t
-} from './transform.js'
+import { transform } from './transform.js'
+import transformBundle from './transforms/luBundling.js'
+import transformLu from './transforms/lu.js'
+import { resolveDependencies } from './deps.js'
 
+import { Spinner } from './log.js'
 import { lex } from './lexer.js'
 import { render } from './renderer.js'
-import { Expression, ExpressionAtom, LocalAssignmentStatement, parse, purge, Statement, StatementType, IfBlock, ReturnExpression, ExpressionArith, AssignmentStatement } from './parser.js'
-import ora, { Ora } from 'ora'
+import { Expression, ExpressionAtom, parse, purge, Statement, } from './parser.js'
 
 export interface LuProject {
     /**
@@ -25,7 +20,7 @@ export interface LuProject {
     name: string
 
     /**
-     * Entrypoint of the project. Defaults to `init.lua`.
+     * Entrypoint of the project. Defaults to `init.lu`.
      */
     entrypoint: string
 
@@ -79,7 +74,7 @@ export function project(root: string) {
 
     // Setup default entrypoint.
     if (!config.entrypoint) {
-        config.entrypoint = 'init.lua'
+        config.entrypoint = 'init.lu'
     }
 
     // Setup default JSX constructor.
@@ -97,91 +92,143 @@ export interface Notices {
     readonly text: string
 }
 
-export function make(ora: Ora, instance: LuProjectInstance): Notices[] {
-    const notices = <Notices[]> []
+export interface RequireProtocolImport {
+    /**
+     * Name of the package to import.
+     */
+    readonly name: string
 
-    function warn(contents: string) {
-        notices.push({ severity: 'warning', text: contents })
-    }
+    /**
+     * Version of the package to import. Defaults to latest.
+     */
+    readonly version?: string
+}
 
-    function info(contents: string) {
-        notices.push({ severity: 'info', text: contents })
-    }
+export interface RequireTrace {
+    /**
+     * Map of module names to their absolute paths on disk.
+     */
+    readonly moduleImports: Record<string, string>
 
-    function doTransforms(fileContents: string, filePath: string) {
-        const tokens = parse(purge(lex(fileContents)))
+    /**
+     * Map of module imports from URIs.
+     */
+    readonly uriImports: string[]
 
-        // Do transforms.
-        transformAssignmentExpressions(tokens)
-        transformCompounds(tokens)
-        transformImports(tokens)
-        transformIntrinsics(tokens)
-        transformElementConstructors(tokens, instance.config.jsxConstructor)
+    /**
+     * Map of module imports from protocols.
+     */
+    readonly protocolImports: Record<string, RequireProtocolImport[]>
 
-        return tokens
-    }
+    /**
+     * Unknown imports. Could be inline modules, could be runtime-specific
+     * import policy.
+     */
+    readonly unknownImports: string[]
+}
 
-    function transformFile(fileContents: string, filePath: string) {
-        return render(doTransforms(fileContents, filePath))
-    }
+/**
+ * Produces a require trace from the file.
+ */
+export function traceRequires(instance: LuProjectInstance, block: Statement[], log: Spinner) {
+    const moduleImports = <Record<string, string>> {}
+    const uriImports = <string[]> []
+    const protocolImports = <Record<string, RequireProtocolImport[]>> {}
+    const unknownImports = <string[]> []
 
-    // Find the entry point.
-    const entryPath = path.join(instance.root, instance.config.entrypoint)
+    transform(block, _=>{}, expr => {
+        const expression = expr.expression
+        if ('right' in expression && !expression.op) {
+            if ('value' in expression.left && expression.left.type === 'var' && expression.left.value === 'require') {
+                const requireExpr = <ExpressionAtom> expression.right!
+                const requirePathAtom = (<Expression[]> requireExpr.value)[0]
+                if (requirePathAtom !== undefined && ('value' in requirePathAtom && requirePathAtom.type === 'string')) {
+                    let requirePath = <string> requirePathAtom.value
 
-    function traceRequires(from: string, block: Statement[]): Record<string, string> {
-        const filemap = <Record<string, string>> {}
-        transform(block, _=>{}, expr => {
-            const expression = expr.expression
-            if ('right' in expression && !expression.op) {
-                if ('value' in expression.left && expression.left.type === 'var' && expression.left.value === 'require') {
-                    const requireExpr = <ExpressionAtom> expression.right!
-                    const requirePathAtom = (<Expression[]> requireExpr.value)[0]
-                    if (requirePathAtom !== undefined && ('value' in requirePathAtom && requirePathAtom.type === 'string')) {
-                        let requirePath = <string> requirePathAtom.value
+                    // Check if the require path is a protocol.
+                    if (/^\w+:/.test(requirePath)) {
+                        // Check if normal URL.
+                        if (requirePath.startsWith('http') || requirePath.startsWith('https')) {
+                            uriImports.push(requirePath)
+                            return
+                        }
 
-                        // Replace . with dashes
+                        // Not URL, protocol import.
+                        const extraction = /(\w+):([\w\-\/]+)(@[\w.]+)?/.exec(requirePath)
+                        const protocol = extraction?.[1]
+                        const packagename = extraction?.[2]
+                        const version = extraction?.[3]
+
+                        if (!protocol || !packagename) {
+                            log.fail(`Malformed package import near "${requirePath}"`)
+                            return
+                        }
+
+                        const protocolArray = protocolImports[protocol] ?? []
+                        protocolArray.push({ name: packagename, version })
+                        protocolImports[protocol] = protocolArray
+                    } else {
                         requirePath = requirePath.replace('.', '/')
 
                         // Check if a local filename exists.
                         const attemptMapLu = path.join(instance.root, !requirePath.endsWith('.lu') ? `${requirePath}.lu` : requirePath)
                         const attemptMapLua = attemptMapLu + 'a'
                         if (fs.existsSync(attemptMapLu)) {
-                            filemap[requirePath] = fs.realpathSync(attemptMapLu)
+                            moduleImports[requirePath] = fs.realpathSync(attemptMapLu)
                         } else if (fs.existsSync(attemptMapLua)) {
-                            filemap[requirePath] = fs.realpathSync(attemptMapLua)
+                            moduleImports[requirePath] = fs.realpathSync(attemptMapLua)
                         } else if (instance.config.modules?.find(m => m === requirePath) === undefined) {
-                            warn(`Module "${requirePath}" not found (required from "${from}"). If this module is guaranteed to exist at runtime, please add it to "modules" in your luconfig.json.`)
+                            unknownImports.push(requirePath)
                         }
                     }
                 }
             }
-        })
-        return filemap
-    }
+        }
+    })
 
+    return <RequireTrace> { moduleImports, protocolImports, uriImports, unknownImports }
+}
 
-    const globalRequireMap = <Record<string, string>> {}
-    const globalTransformed = <Record<string, Statement[]>> {}
+export function transformScriptWithContext(instance: LuProjectInstance, fileContents: string) {
+    const tokens = parse(purge(lex(fileContents)))
+    // Transform Lu syntax into Lua.
+    transformLu(instance.config, tokens)
+    return tokens
+}
+
+export async function make(instance: LuProjectInstance, log: Spinner): Promise<Notices[]> {
+    const notices = <Notices[]> []
+
+    // Find the entry point.
+    const entryPath = path.join(instance.root, instance.config.entrypoint)
+
+    // Trace all imports.
+    const allTraces = <RequireTrace[]> []
+    const globalModuleImports = <Record<string, string>> {}
+    const globalModuleParses = <Record<string, Statement[]>> {}
     let entrypointTransformed!: Statement[]
 
-    // Trace all imports through expression visitation.
     let toVisit: string[] = [entryPath]
     while (toVisit.length > 0) {
         const next = toVisit.pop()
         if (next) {
-            const transformed = doTransforms(fs.readFileSync(next, 'utf-8'), next)
-            globalTransformed[next] = transformed
+            const transformedParse = transformScriptWithContext(instance, fs.readFileSync(next, 'utf-8'))
+            globalModuleParses[next] = transformedParse
 
             // Store entrypoint AST for later.
             if (next === entryPath) {
-                entrypointTransformed = transformed
+                entrypointTransformed = transformedParse
             }
 
-            const imports = traceRequires(next, transformed)
-            if (Object.keys(imports).length > 0) {
-                for (const [importName, importPath] of Object.entries(imports)) {
-                    if (!globalRequireMap[importName]) {
-                        globalRequireMap[importName] = importPath
+            // Trace the requires and store it into the trace collection (to be merged).
+            const imports = traceRequires(instance, transformedParse, log)
+            allTraces.push(imports)
+
+            // Recursively index the module imports, if any.
+            if (Object.keys(imports.moduleImports).length > 0) {
+                for (const [importName, importPath] of Object.entries(imports.moduleImports)) {
+                    if (!globalModuleImports[importName]) {
+                        globalModuleImports[importName] = importPath
                         toVisit.push(importPath)
                     }
                 }
@@ -189,113 +236,38 @@ export function make(ora: Ora, instance: LuProjectInstance): Notices[] {
         }
     }
 
-    // Bundle if requested.
-    if (instance.config.bundle && Object.keys(globalRequireMap).length > 0) {
-        // Create inline import table.
-        ora.text = 'Bundling'
-        const importFunctions = new Map<number | Expression, Expression>()
-        for (const [importName, importPath] of Object.entries(globalRequireMap)) {
-            const importStats = globalTransformed[importPath]
-            importFunctions.set(t.string(importName), t.closure(importStats))
-        }
+    // Merge all traces into one big trace.
+    let supertraceModules = <Record<string, string>> {}
+    let supertracePackages = <Record<string, RequireProtocolImport[]>> {}
+    let supertraceUris: string[] = []
 
-        // Prepend import table assignment and require detour. 
-        entrypointTransformed.unshift(<LocalAssignmentStatement> {
-            line: 0,
-            vars: ['__LU_REQUIRE', '__LU_UNPACK', '__LU_IMPORT_CACHE'],
-            assignment: [t.name('require'), <ExpressionArith> { 
-                left: t.name('unpack'),
-                right: t.name('table.unpack'),
-                op: 'or'
-            }, t.table(t.object({}))],
-            type: StatementType.LocalAssignment,
-        }, <LocalAssignmentStatement> {
-            line: 0,
-            vars: ['__LU_IMPORT_TABLE'],
-            assignment: [t.table(importFunctions)],
-            type: StatementType.LocalAssignment,
-        }, <LocalAssignmentStatement> {
-            line: 2,
-            vars: ['require'],
-            assignment: [t.closure([
-                <LocalAssignmentStatement> {
-                    type: StatementType.LocalAssignment,
-                    line: 0,
-                    vars: ['tryCache'],
-                    assignment: [t.expression('exprIndex', t.name('__LU_IMPORT_CACHE'), t.name('input'))]
-                },
-
-                <IfBlock> {
-                    type: StatementType.IfBlock,
-                    line: 0,
-                    condition: t.name('tryCache'),
-                    stats: [
-                        <ReturnExpression> {
-                            type: StatementType.ReturnExpression,
-                            line: 0,
-                            exprs: [t.call(t.name('__LU_UNPACK'), [t.name('tryCache')])]
-                        }
-                    ],
-                    else: <IfBlock> {
-                        type: StatementType.IfBlock,
-                        line: 0,
-                        stats: [
-                            <LocalAssignmentStatement> {
-                                type: StatementType.LocalAssignment,
-                                line: 0,
-                                vars: ['module'],
-                                assignment: [t.expression('exprIndex', t.name('__LU_IMPORT_TABLE'), t.name('input'))]
-                            },
-
-                            <IfBlock> {
-                                type: StatementType.IfBlock,
-                                line: 0,
-                                condition: t.name('module'),
-                                stats: [
-                                    <AssignmentStatement> {
-                                        type: StatementType.Assignment,
-                                        line: 0,
-                                        left: [t.name('tryCache')],
-                                        right: [t.table(
-                                            t.array([
-                                                t.call(
-                                                    t.name('module'), 
-                                                [])
-                                            ])    
-                                        )]
-                                    },
-        
-                                    <AssignmentStatement> {
-                                        type: StatementType.Assignment,
-                                        line: 0,
-                                        left: [t.expression('exprIndex', t.name('__LU_IMPORT_CACHE'), t.name('input'))],
-                                        right: [t.name('tryCache')]
-                                    }
-                                ],
-                                else: <IfBlock> {
-                                    type: StatementType.IfBlock,
-                                    line: 0,
-                                    stats: [
-                                        <ReturnExpression> {
-                                            type: StatementType.ReturnExpression,
-                                            line: 0,
-                                            exprs: [t.call(t.name('__LU_REQUIRE'), [t.name('input')])]
-                                        }
-                                    ]
-                                }
-                            },
-                        ],
-                    }
-                },
-
-                <ReturnExpression> {
-                    type: StatementType.ReturnExpression,
-                    line: 0,
-                    exprs: [t.call(t.name('__LU_UNPACK'), [t.name('tryCache')])]
-                }
-            ], ['input'])],
-            type: StatementType.LocalAssignment,
+    allTraces.forEach(trace => {
+        Object.entries(trace.moduleImports).forEach(([importName, importPath]) => supertraceModules[importName] = importPath)
+        Object.entries(trace.protocolImports).forEach(([protocolName, protocolArr]) => {
+            const superArr = supertracePackages[protocolName] ?? []
+            superArr.push(...protocolArr) // May have duplicates.
+            supertracePackages[protocolName] = [...new Set(superArr)] // Using a set erases duplicates.
         })
+        supertraceUris.push(...trace.uriImports)
+    })
+
+    // Remove URI duplicates.
+    supertraceUris = [...new Set(supertraceUris)]
+
+    // Resolve dependencies.
+    await resolveDependencies(instance, { 
+        uriImports: supertraceUris, 
+        protocolImports: supertracePackages,
+        moduleImports: supertraceModules,
+        unknownImports: []
+    }, log)
+
+    // Bundle if requested.
+    if (instance.config.bundle && Object.keys(globalModuleImports).length > 0) {
+        log.step('good', 'Bundling')
+        
+        // Bundle up all the scripts.
+        transformBundle(entrypointTransformed, globalModuleImports, globalModuleParses)
 
         // Write to outfile and return.
         const outFile = path.join(instance.root, instance.config.outFile!)

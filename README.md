@@ -1,10 +1,55 @@
-# `lu`
+<p align="center">
+    <img src="https://i.imgur.com/Frftkcu.png">
+</p>
 
-**`lu` is an extended syntax for Lua that aims to implement quality-of-life features for the Lua 5.1 programming language.** Lua is very compact and comfortable to write, but it notably lacks certain features that are often ubiquitous in other languages, such as a standard module/package protocol, reflective features (attributes), compound operators, and pre-processing features (macros), among many other things.
+***
 
-**`lu` strives to fix these missing conveniences first and foremost.** Every single feature added no matter how significant is always compiled down to fully valid Lua code that relies exclusively on standard runtime (5.1) functions.
+* 🚀 **Application-scale Lua programming in a portable package.**  
+`lu` upgrades Lua with quality-of-life features and modern programming concepts as to adapt the language for productive application-scale development.
 
-**`lu` also implements JSX syntax support.** This is the only "big" feature `lu` implements. This means [JSX-style](https://reactjs.org/docs/introducing-jsx.html) element composition can be written alongside Lua code and subsequently fed into libraries such as [`isu`](https://github.com/ccrpr/isu) or [Roact](https://github.com/Roblox/roact). Here's an example of such an application with `isu2` (currently unreleased), featuring JSX, attributes, `import` syntax, and pipe anonymous functions:
+* ⚒️ **Fill the holes in the Lua programming language.**  
+`lu` adds support for many features that are felt to be _missing_ from the language (such as a proper module syntax, compound operations, assignment expressions, a preprocessor, and more) while respecting Lua's simplicity.
+
+* ⚒️ **Optional supercharged extensions for rapid development.**  
+`lu` adds also features entirely optional supercharged syntax additions to accelerate development and increase productivity, such as the JSX-style syntax that compiles down to constructor calls (for usage with libraries such as [`isu`](https://github.com/ccrpr/isu) or [Roact](https://github.com/Roblox/roact)).
+
+* 💱 **Inherently compatible with all existing Lua programs.**  
+`lu` is a superset of Lua 5.1 in the same way that TypeScript is a superset of JavaScript. All features compile down to Lua code fully compatible with existing runtimes, and relies on a minimal subset of the standard library.
+
+* ⏬ **Automatically and intelligently manage dependencies.**  
+`lu` includes [Deno-style dependency management](https://deno.land/manual@v1.25.4/examples/manage_dependencies), allowing you to easily import libraries from remote sources directly in your code. It additionally integrates with package managers such as [LuaRocks](https://luarocks.org/) and [wally](https://github.com/UpliftGames/wally).
+
+* 📑 **Turn scripts into packageable projects.**  
+`lu` manages your code as a single package instead of multiple, formally dissociate scripts. This allows you to configure project-wide options, modify import behavior, bundle code into a single file, and tree-shake unused code out.
+
+***
+
+## Getting started
+`lu` is distributed on the [npm package registry](https://www.npmjs.com/). To install packages from the npm registry, you need [nodejs 16.x+](https://nodejs.org/en/) installed on your machine. To run code directly from `lu`, you will need to have Lua or LuaJIT installed to your `%PATH%` (as the `lua` or `luajit` binaries. `luajit` will be selected over `lua` if available.). Compilation and project management does not require Lua to be installed.
+```sh
+# Download the package globally.
+npm i @ccrpr/lu -g
+
+# Repl mode requires Lua/LuaJIT to be installed! Read above for more info.
+lu --repl
+
+# Initiate a new project in the current directory.
+lu --init
+
+# Build the initiated project. Does not require Lua to be installed.
+lu ./untitled-project
+
+# Run the built project. Requires Lua to be installed.
+lua ./untitled-project/out.lua
+```
+
+## An in-depth look
+
+`lu` is an extended syntax for Lua that aims to implement quality-of-life features for the Lua 5.1 programming language alongside features pertinent to existing application-scale runtimes such as Luau's associate libraries. Lua is very compact and comfortable to write, but it notably lacks certain features that are often ubiquitous in other languages, such as a standard module/package protocol, reflective features (attributes), compound operators, and pre-processing features (macros), among many other things.
+
+`lu` strives to fix these missing conveniences first and foremost. Every single feature added no matter how significant is always compiled down to fully valid Lua code that relies exclusively on standard runtime (5.1) functions.
+
+`lu` also implements JSX syntax support. This is the only "big" feature `lu` implements. This means [JSX-style](https://reactjs.org/docs/introducing-jsx.html) element composition can be written alongside Lua code and subsequently fed into libraries such as [`isu`](https://github.com/ccrpr/isu) or [Roact](https://github.com/Roblox/roact). Here's an example of such an application with `isu2` (currently unreleased), featuring JSX, attributes, `import` syntax, and pipe anonymous functions:
 ```lua
 import { useState, useEvent, Component } from 'isu2'
 
@@ -21,32 +66,85 @@ import { useState, useEvent, Component } from 'isu2'
 end
 ```
 
-**`lu`** was designed with `isu` in mind, [a minimal and lightweight reactive framework for building user interfaces in the Roblox engine.](https://github.com/ccreaper/isu) If you are looking for a compact alternative to your reactive component library, then I suggest you try it out. That said, `lu` can be configured to work with any stateful component-based library, so there's no vendor lock-in.
+`lu` was designed with `isu` in mind, [a minimal and lightweight reactive framework for building user interfaces in the Roblox engine.](https://github.com/ccreaper/isu) If you are looking for a compact alternative to your reactive component library, then I suggest you try it out. That said, `lu` can be configured to work with any stateful component-based library, so there's no vendor lock-in.
 
 ***
 
 ## `lu` is still in heavy construction
-**`lu` is currently out of the draft stage and is currently in heavy construction.**  These are the features `lu` should have:
+**`lu` is currently out of the draft stage and is currently in heavy construction.** `lu` development is split in several stages.
+
+### **Stage 1**: Language syntax, parsing, processing
 - [x] JSX-like expressions for `isu` component trees that can easily interweave with Lua and passes down special properties to the `isu` instantiators, such as the `_text` property for markup-style text nodes, or the `_children` property for subcomponent construction.
   - [x] JSX expression support and rendering to Lua 5.1 calls through `h` (configurable through `luconfig.json`).
   - [x] Lua expressions in blocks and parameters.
   - [ ] Text node support.
+    - A decision must be made on how text nodes are to be inserted in the resulting constructor call, or if they are to be supported at all.
 - [x] Minor QoL extensions to the Lua syntax that doesn't take too much effort to compile down to Lua.
   - [x] Reflective variable and function decorators through the `@decorator` and `@decorator(...)` syntax.
-  - [x] Single-expression anonymous functions through Ruby-like pipe operators.
+    - [x] Local variable declarations
+    - [x] Local function declarations
+    - [x] Other function declarations (global, table)
+    - [ ] Full-body function declarations in tables 
+  - [x] Single-expression anonymous functions through Ruby/Rust-like pipes.
   - [x] Assignments can be included in expressions. 
+  - [ ] Ternary operator (`expr ? truthy : falsy`)
+    - Necessity to be reconsidered considering Luau's if/then/else expressions.
   - [x] Compound operators (such as `+=` and `..=`).
     - Unlike Luau, these can be part of an expression!
   - [x] Full-body function declarations in tables.
   - [ ] `import` and `export` statements à la ES6.
-- [x] Script pre- and post- processing.
-  - [x] Transformation passes for compiling `lu` syntax into Lua 5.1 syntax.
-  - [ ] Macros through the `!` designator.
-  - [ ] Passthrough Luau support, meaning Luau syntax is supported but not considered during compilation.
-  - [x] Roll-up of `import` and `require` statements (bundling).
+- [ ] Preprocessing through the `!` macro syntax.
+- [x] Full Lua lexer and parser
+  - [x] Expression parsing
+    - [ ] Tests must be written to guarantee stability.
+  - [x] Statement parsing
+    - [ ] Tests must be written to guarantee stability.
+  - [ ] Luau additions
+    - [x] `continue`
+    - [ ] Extended string literals (`\x`, `\u`, `\z`)
+    - [ ] Binary number literals (`0b01010101`)
+    - [ ] Type declaration parsing
+    - [ ] Type constraint parsing in function args
+    - [ ] Type constraint parsing in variable declaration
+    - [ ] Function return type constraint
+    - [ ] Value type casting
+    - [ ] If/then/else expressions
+  - [x] Renderer (compiler)
+- [x] `lu`->Lua 5.1 compiler
+  - [x] `lu` transforms
+    - [x] Transforms for intrinsics
+    - [x] Transforms for compound operations
+    - [x] Transforms for assignment expressions
+    - [x] Transforms for local module imports
+    - [x] Transforms for JSX constructor calls
+    - [ ] Transforms for `!` and `<! !>` macros
+    - [ ] Transforms for ternary operation
+  - [ ] Luau transforms
+    - [ ] Block inversion for `continue`
+    - [ ] Optional strict type enforcement at compile time
+    - [ ] Generalized iteration when an inline table is detected
+    - [ ] If/then/else expression
+  - [x] Pretty printing for readability and debugging
+  - [ ] Minified printing for bundles and distribution
+
+### **Stage 2**: `lu` tool for project and dependency management
+- [x] Compilation options setup through a `luconfig.json` file.
+- [x] Bundling of project code into a single distributable. 
+- [ ] Import modules from imported URIs as dependencies.
+- [ ] Import packages from notable package managers.
+  - [ ] Support for the LuaRocks registry.
+  - [ ] Support for the wally registry.
+- [ ] Import other `lu` packages.
+  - [ ] Maybe have a registry for `lu` packages? If possible, `lu` packages should be hosted on an existing registry.
+- [ ] Automagic conversion and bundling of `rbxm` imports.
+  - [ ] `rbxm` parser.
+  - [ ] Rojo detection and integration.
+
+### **Stage 3**: Tooling
 - [ ] Language server for integration with IDEs based on [`luau-lsp`](https://github.com/JohnnyMorganz/luau-lsp).
   - [ ] Visual Studio Code extension. This will be prioritized.
-- [x] Compilation options setup through a `luconfig.json` file.
+
+***
 
 ## Examples
 

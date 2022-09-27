@@ -1,5 +1,2 @@
 
-import { add, mul } from "src/test-import"
-import ffi from "ffi"
-
-print(add(1, 3) + mul(2, 5))
+import isu from 'https://raw.githubusercontent.com/ccrpr/isu/main/isu.min.lua'

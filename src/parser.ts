@@ -321,6 +321,7 @@ export function parse(tokens: Token[]): Statement[] {
 
     function atom(): Expression {
         assert(!eob(), 'Expression ended unexpectedly')
+
         if (testNext(TokenType.Operator, '(')) {
             const val = expression()
             expect(TokenType.Operator, ')', true)
@@ -472,14 +473,14 @@ export function parse(tokens: Token[]): Statement[] {
                 }
                 cur = tokens[i]
             }
-            
+
             if (eob() 
                 || (cur.type === TokenType.Operator && notOperators.includes(<string> cur.value))
                 || !test(TokenType.Operator)
                 || ('op' in lhs && lhs.unary) 
                 || ExprOpPrecedence[cur.value as string]! < minimumPrecedence)
-            { // unary operators should break
-                break;
+            {
+                break
             }
 
             expect(TokenType.Operator);
@@ -566,7 +567,12 @@ export function parse(tokens: Token[]): Statement[] {
     }
 
     function statement(): Statement | undefined {
+        // Skip any semicolons.
+        while (testNext(TokenType.Operator, ';'));
+
         const cur = tokens[i]
+        console.log(cur)
+
         if (cur.type === TokenType.Word) {
             const wordValue = <WordsUnion> cur.value
             switch (wordValue) {
@@ -917,10 +923,13 @@ export function parse(tokens: Token[]): Statement[] {
  * Removes whitespace and comments from the tokens.
  */
 export function purge(tokens: Token[]): Token[] {
-    return tokens.filter(token =>
-        token.type !== TokenType.Whitespace &&
-        token.type !== TokenType.Comment
-    )
+    return tokens.filter(token => {
+        if (token.type === TokenType.Comment || token.type === TokenType.Whitespace) {
+            return false // Remove all comments and whitespace.
+        } else {
+            return true
+        }
+    })
 }
 
 export default parse
