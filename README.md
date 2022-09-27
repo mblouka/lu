@@ -71,7 +71,7 @@ end
 ***
 
 ## `lu` is still in heavy construction
-**`lu` is currently out of the draft stage and is currently in heavy construction.** `lu` development is split in several stages.
+**`lu` is currently out of the draft stage and is currently in heavy construction. It is not ready for production use.** `lu` development is split in several stages.
 
 ### **Stage 1**: Language syntax, parsing, processing
 - [x] JSX-like expressions for `isu` component trees that can easily interweave with Lua and passes down special properties to the `isu` instantiators, such as the `_text` property for markup-style text nodes, or the `_children` property for subcomponent construction.
