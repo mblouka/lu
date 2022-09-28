@@ -30,13 +30,33 @@ export enum StatementType {
     Ignore
 }
 
-export interface Name { name: string; type: string; }
+export interface Statement { 
+    type: StatementType
+    line: number 
+}
 
-export interface Statement { type: StatementType; line: number; }
+export interface TypeDeclaration {
+    /**
+     * A primitive type is one declared in the parser.
+     * A user type is one declared by the user.
+     */
+    degree: 'primitive' | 'user'
 
-export const IgnoredStatement = <IgnoreStatement> { type: StatementType.Ignore, line: -1 }
+    /**
+     * `named`: `local x: name`  
+     * `function`: `local x: () -> ()`  
+     * `tuple`: `local x: { a: number, b: number, ... }`  
+     * `array`: `local x: { [key]: number }`
+     */
+    type: 'named' | 'function' | 'tuple' | 'array'
 
-export type ReturnExpression =
+    /**
+     * `type name<Generic1, Generic2, ...> = ...`
+     */
+    generic?: string[]
+}
+
+export type ReturnStatement =
     Statement & { exprs?: Expression[] };
 export type LocalFunctionDefinition =
     Statement & { var: string, func: Function, exported?: boolean };
@@ -84,7 +104,6 @@ export interface Function {
     args: string[];
 }
 
-
 export type Ast = Statement[];
 
 /**
@@ -93,6 +112,9 @@ export type Ast = Statement[];
 export type TableConstructor = 
     Map<Expression | number, Expression>
 
+/**
+ * Provides an inline constructor for a jsx element.
+ */
 export interface ElementConstructor {
     /**
      * Name of the element. <name/> or <name></name>
@@ -111,7 +133,17 @@ export interface ElementConstructor {
 }
 
 export type ExpressionAtomType = 
-    'number' | 'string' | 'boolean' | 'nil' | 'var' | 'func' | 'vararg' | 'call' | 'index' | 'table' | 'element'
+    'number'        // 123, 456.01 0xabc, 0b10101
+    | 'string'      // "Hello", 'hello', [[hello]], [=[hello]=]
+    | 'boolean'     // true, false
+    | 'nil'         // nil
+    | 'name'        // var1 var2 var3
+    | 'func'        // function(...) --[[body]] end
+    | 'vararg'      // ...
+    | 'call'        // {expr}(...)
+    | 'index'       // expr[index]
+    | 'table'       // { ... }
+    | 'element'     // <elem/>
 
 /**
  * Atoms are the lowest degree elements in an expression.
@@ -129,6 +161,8 @@ export interface ExpressionArith {
 }
 
 export type Expression = ExpressionArith | ExpressionAtom;
+
+export const IgnoredStatement = <IgnoreStatement> { type: StatementType.Ignore, line: -1 }
 
 export const ExprOpPrecedence: Partial<{ [k in OperatorsUnion | string]: number }> = {
     '^': 8,
@@ -350,7 +384,7 @@ export function parse(tokens: Token[]): Statement[] {
                 value: <Function> { 
                     args: fargs, 
                     vararg: vararg, 
-                    stats: [<ReturnExpression> {
+                    stats: [<ReturnStatement> {
                         type: StatementType.ReturnExpression,
                         exprs: [expression()],
                         line: i
@@ -365,7 +399,7 @@ export function parse(tokens: Token[]): Statement[] {
                 case TokenType.String: 
                     return { type: 'string', value: <string> cur.value }
                 case TokenType.Name: 
-                    return { type: 'var', value: <string> cur.value }
+                    return { type: 'name', value: <string> cur.value }
                 case TokenType.Word: {
                     if (cur.value === 'true') {
                         return { type: 'boolean', value: true };
@@ -431,7 +465,7 @@ export function parse(tokens: Token[]): Statement[] {
                 lhs = { 
                     left: lhs, 
                     right: { 
-                        type: 'var', 
+                        type: 'name', 
                         value: indexExpr 
                     }, 
                     op: 'nameIndex' 
@@ -600,7 +634,7 @@ export function parse(tokens: Token[]): Statement[] {
                         && !test(TokenType.Word, 'nil')
                         && !test(TokenType.Word, 'function')) 
                     {
-                        return <ReturnExpression> { 
+                        return <ReturnStatement> { 
                             type: StatementType.ReturnExpression, 
                             line: cur.line 
                         }
@@ -609,7 +643,7 @@ export function parse(tokens: Token[]): Statement[] {
                         while (testNext(TokenType.Operator, ',')) {
                             exprs.push(expression());
                         }
-                        return <ReturnExpression> { 
+                        return <ReturnStatement> { 
                             type: StatementType.ReturnExpression, 
                             line: cur.line, 
                             exprs: exprs 

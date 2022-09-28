@@ -19,7 +19,7 @@ export function renderExpression(expr: Parser.Expression | Parser.ExpressionAtom
         // render atom
         if (expr.type === 'boolean') {
             return expr.value as boolean ? 'true' : 'false';
-        } else if (expr.type === 'var') {
+        } else if (expr.type === 'name') {
             return expr.value as string;
         } else if (expr.type === 'number') {
             return `${expr.value as number}`;
@@ -133,7 +133,7 @@ export function render(statement: Parser.Statement | Parser.Statement[], tabLeve
         // simple stats
         case Parser.StatementType.BreakStatement: return `${tabStr}break`;
         case Parser.StatementType.ReturnExpression: {
-            const retExpr = statement as Parser.ReturnExpression;
+            const retExpr = statement as Parser.ReturnStatement;
             return `${tabStr}return${retExpr.exprs?` ${retExpr.exprs.map(expr => renderExpression(expr)).join(', ')}`:''}`;
         }
 

@@ -139,7 +139,7 @@ export function traceRequires(instance: LuProjectInstance, block: Statement[], l
     transform(block, _=>{}, expr => {
         const expression = expr.expression
         if ('right' in expression && !expression.op) {
-            if ('value' in expression.left && expression.left.type === 'var' && expression.left.value === 'require') {
+            if ('value' in expression.left && expression.left.type === 'name' && expression.left.value === 'require') {
                 const requireExpr = <ExpressionAtom> expression.right!
                 const requirePathAtom = (<Expression[]> requireExpr.value)[0]
                 if (requirePathAtom !== undefined && ('value' in requirePathAtom && requirePathAtom.type === 'string')) {

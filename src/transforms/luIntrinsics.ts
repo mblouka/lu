@@ -23,7 +23,7 @@ export default function transformIntrinsics(block: Statement[]) {
 
                         // Getter.
                         get: t.closure([
-                            <Parser.ReturnExpression> {
+                            <Parser.ReturnStatement> {
                                 type: StatementType.ReturnExpression,
                                 line: localstat.line,
                                 exprs: [ t.name(variable) ]

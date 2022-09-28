@@ -5,7 +5,7 @@ import {
     Statement, 
     StatementType, 
     IfBlock, 
-    ReturnExpression, 
+    ReturnStatement, 
     ExpressionArith, 
     AssignmentStatement 
 } from '../parser.js'
@@ -53,7 +53,7 @@ export default function transformBundle(block: Statement[], requireMap: Record<s
                 line: 0,
                 condition: t.name('tryCache'),
                 stats: [
-                    <ReturnExpression> {
+                    <ReturnStatement> {
                         type: StatementType.ReturnExpression,
                         line: 0,
                         exprs: [t.call(t.name('__LU_UNPACK'), [t.name('tryCache')])]
@@ -99,7 +99,7 @@ export default function transformBundle(block: Statement[], requireMap: Record<s
                                 type: StatementType.IfBlock,
                                 line: 0,
                                 stats: [
-                                    <ReturnExpression> {
+                                    <ReturnStatement> {
                                         type: StatementType.ReturnExpression,
                                         line: 0,
                                         exprs: [t.call(t.name('__LU_REQUIRE'), [t.name('input')])]
@@ -111,7 +111,7 @@ export default function transformBundle(block: Statement[], requireMap: Record<s
                 }
             },
 
-            <ReturnExpression> {
+            <ReturnStatement> {
                 type: StatementType.ReturnExpression,
                 line: 0,
                 exprs: [t.call(t.name('__LU_UNPACK'), [t.name('tryCache')])]

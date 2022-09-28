@@ -23,7 +23,7 @@ export default function transformAssignmentExpressions(block: Statement[]) {
                             line: state.statement.statement.line
                         },
 
-                        <Parser.ReturnExpression> {
+                        <Parser.ReturnStatement> {
                             type: StatementType.ReturnExpression,
                             exprs: [expr.left],
                             line: state.statement.statement.line
@@ -39,7 +39,7 @@ export default function transformAssignmentExpressions(block: Statement[]) {
                             line: state.statement.statement.line
                         },
 
-                        <Parser.ReturnExpression> {
+                        <Parser.ReturnStatement> {
                             type: StatementType.ReturnExpression,
                             exprs: [expr.left],
                             line: state.statement.statement.line

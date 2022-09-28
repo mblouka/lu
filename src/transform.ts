@@ -169,7 +169,7 @@ export const t = {
     },
 
     name(value: string) {
-        return t.atom('var', value)
+        return t.atom('name', value)
     },
 
     table(value: Parser.TableConstructor) {
@@ -309,7 +309,7 @@ export const t = {
                 visitExpression(transformState, funcstat.expr)
                 funcstat.args?.forEach(arg => visitExpression(transformState, arg))
             } else if (stat.type === StatementType.ReturnExpression) {
-                const returnstat = <Parser.ReturnExpression> stat
+                const returnstat = <Parser.ReturnStatement> stat
                 returnstat.exprs?.forEach(expr => visitExpression(transformState, expr))
             } else if (stat.type === StatementType.Assignment) {
                 const assignstat = <Parser.AssignmentStatement> stat
