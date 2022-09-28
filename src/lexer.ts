@@ -206,19 +206,27 @@ export function lex(source: string): Token[] {
     function number(): Token {
         if (test('0x') || test('0X')) {
             i += 2 // skip over hex header
-            const [numStart, numEnd] = until(s => !str.hexadecimal(s));
-            const numValue = parseInt(source.substring(numStart, numEnd), 16);
+            const [numStart, numEnd] = until(s => !str.hexadecimal(s) && s !== '_')
+            const numValue = parseInt(source.substring(numStart, numEnd), 16)
             if (isNaN(numValue)) {
-                error(`Number '${source.substring(numStart, numEnd)}' is invalid.`);
+                error(`Number '${source.substring(numStart, numEnd)}' is invalid.`)
             }
-            return { type: TokenType.Number, value: numValue, line: line };
+            return { type: TokenType.Number, value: numValue, line: line }
+        } else if (test('0b') || test('0B')) {
+            i += 2 // skip over bin header
+            const [numStart, numEnd] = until(s => (s !== '0' && s !== '1' && s !== '_'))
+            const numValue = parseInt(source.substring(numStart, numEnd), 2)
+            if (isNaN(numValue)) {
+                error(`Number '${source.substring(numStart, numEnd)}' is invalid.`)
+            }
+            return { type: TokenType.Number, value: numValue, line: line }
         } else {
-            const [numStart, numEnd] = until(s => !str.numeric(s));
-            const numValue = parseInt(source.substring(numStart, numEnd));
+            const [numStart, numEnd] = until(s => !str.numeric(s) && s !== '_')
+            const numValue = parseInt(source.substring(numStart, numEnd))
             if (isNaN(numValue)) {
-                error(`Number '${source.substring(numStart, numEnd)}' is invalid.`);
+                error(`Number '${source.substring(numStart, numEnd)}' is invalid.`)
             }
-            return { type: TokenType.Number, value: numValue, line: line };
+            return { type: TokenType.Number, value: numValue, line: line }
         }
     }
 
@@ -257,6 +265,8 @@ export function lex(source: string): Token[] {
 
     function whitespace(): Token {
         const [wsStart, wsEnd] = until(s => !str.whitespace(s));
+        const ws = source.substring(wsStart, wsEnd)
+        line += ws.split('\n').length - 1
         return { type: TokenType.Whitespace, value: source.substring(wsStart, wsEnd), line: line };
     }
 

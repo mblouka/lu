@@ -571,7 +571,6 @@ export function parse(tokens: Token[]): Statement[] {
         while (testNext(TokenType.Operator, ';'));
 
         const cur = tokens[i]
-        console.log(cur)
 
         if (cur.type === TokenType.Word) {
             const wordValue = <WordsUnion> cur.value

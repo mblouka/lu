@@ -1,2 +1,5 @@
 
-import isu from 'https://raw.githubusercontent.com/ccrpr/isu/main/isu.min.lua'
+import mod from 'src/mod'
+
+local a = 0b101010101
+print(a)

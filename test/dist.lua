@@ -1,16 +1,7 @@
 local __LU_REQUIRE, __LU_UNPACK, __LU_IMPORT_CACHE = require, (unpack or table.unpack), {}
 local __LU_IMPORT_TABLE = {
-    ["src/test-import"] = function()
-      local function add(a, b)
-        return (a + b)
-      end
-      local function mul(a, b)
-        return (a * b)
-      end
-      return {
-    ["add"] = add;
-    ["mul"] = mul
-  }
+    ["src/mod"] = function()
+
     end
   }
 local require = function(input)
@@ -28,7 +19,6 @@ local require = function(input)
     end
     return __LU_UNPACK(tryCache)
   end
-local __import0 = require("src/test-import")
-local add, mul = __import0.add, __import0.mul
-local ffi = require("ffi")
-print((add(1, 3) + mul(2, 5)))
+local mod = require("src/mod")
+local a = 341
+print(a)
