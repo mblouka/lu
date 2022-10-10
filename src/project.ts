@@ -9,8 +9,10 @@ import { resolveDependencies } from './deps.js'
 
 import { Spinner } from './log.js'
 import { lex } from './lexer.js'
-import { render } from './renderer.js'
 import { Expression, ExpressionAtom, parse, purge, Statement, } from './parser.js'
+
+import pretty from './renderer/pretty.js'
+import minify from './renderer/minify.js'
 
 export interface LuProject {
     /**
@@ -29,6 +31,11 @@ export interface LuProject {
      * Incompatible with `outDir` setting, set `outFile` instead.
      */
     bundle?: boolean
+
+    /**
+     * Whether outputs should be minified.
+     */
+    minify?: boolean
 
     /**
      * Directory to output all Lu scripts. Incompatible with `bundle`
@@ -262,8 +269,15 @@ export async function make(instance: LuProjectInstance, log: Spinner): Promise<N
         unknownImports: []
     }, log)
 
-    // Bundle if requested.
-    if (instance.config.bundle && Object.keys(globalModuleImports).length > 0) {
+    const importCount = Object.keys(globalModuleImports).length
+
+    // Use appropriate renderer for the project. 
+    const render = instance.config.minify ? minify.render : pretty.render
+
+    if (instance.config.bundle && importCount > 0) {
+        if (instance.config.outFile === undefined) {
+            throw new Error('"outFile" must be set if you are bundling your project.')
+        }
         log.step('good', 'Bundling')
         
         // Bundle up all the scripts.
@@ -271,7 +285,27 @@ export async function make(instance: LuProjectInstance, log: Spinner): Promise<N
 
         // Write to outfile and return.
         const outFile = path.join(instance.root, instance.config.outFile!)
-        fs.writeFileSync(outFile, render(entrypointTransformed), 'utf-8')
+        fs.writeFileSync(outFile, render(0, entrypointTransformed), 'utf-8')
+    } else {
+        if (instance.config.outDir === undefined) {
+            throw new Error('"outDir" must be set if you are not bundling your project.')
+        }
+
+        // Make the outdir if it doesn't exist.
+        const outDirectory = path.join(instance.root, instance.config.outDir)
+        if (!fs.existsSync(outDirectory)) {
+            fs.mkdirSync(outDirectory, { recursive: true })
+        }
+
+        // Render every required file.
+        for (const [filePath, fileParse] of Object.entries(globalModuleParses)) {
+            const destinationPath = path.join(outDirectory, path.relative(instance.root, filePath))
+            const destinationFolder = path.dirname(destinationPath)
+            if (!fs.existsSync(destinationFolder)) {
+                fs.mkdirSync(destinationFolder, { recursive: true })
+            }
+            fs.writeFileSync(destinationPath, render(0, fileParse), 'utf-8')
+        }
     }
 
     return notices

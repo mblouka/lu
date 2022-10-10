@@ -1,5 +1,18 @@
 
-import mod from 'src/mod'
-
-local a = 0b101010101
-print(a)
+something(function(a, b, c)
+    if type(a) ~= 'number' or type(b) ~= 'number' then
+        error("a/b aren't numbers")
+    end
+    something(function(a, b, c)
+        if type(a) ~= 'number' or type(b) ~= 'number' then
+            error("a/b aren't numbers")
+        end
+        return a + b
+        something(function(a, b, c)
+            if type(a) ~= 'number' or type(b) ~= 'number' then
+                error("a/b aren't numbers")
+            end
+            return a + b
+        end)
+    end)
+end)
