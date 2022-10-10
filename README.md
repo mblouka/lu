@@ -341,4 +341,51 @@ local x = h(myComponent, {
 }, "hello", h(SubComponent, { short = "yes" }), "world")
 ```
 
-The function it compiles to can be configured in `luconfig.json`. 
+The function it compiles to can be configured in `luconfig.json`.
+
+***
+
+## Using the lexer, parser and transformation API
+`lu` can also be used to parse [Lua](https://www.lua.org/manual/5.1/) and [Luau](https://github.com/Roblox/luau) code, transforming produced ASTs, and rendering the results. The API is somewhat inspired from Babel, offering a similar visitation algorithm and a `t` library to efficiently generate code wherever needed.
+```ts
+// Import relevant functions.
+import { lex } from 'lu/lexer'
+import { parse, purge } from 'lu/parser'
+import { t, transform } from 'lu/transform'
+
+// Import renderers. Two are available: pretty and minify.
+import pretty from 'lu/renderer/pretty'
+import minify from 'lu/renderer/minify'
+
+// Import types and enums. Ignore if not TS.
+import { StatementType } from 'lu/parser'
+import type { LocalAssignmentStatement, ReturnStatement } from 'lu/parser'
+
+// Our script.
+const myScript = 'local a = 1'
+
+// Obtain tokens from the script and remove comments and whitespace.
+const tokens = lex(myScript)
+const cleanTokens = purge(tokens)
+
+// Obtain an AST from the tokens.
+const ast = parse(cleanTokens)
+
+// Rename the local variable and insert a new statement.
+transform(ast, state => {
+  if (state.statement.type === StatementType.LocalAssignment) {
+    const localstat = <LocalAssignmentStatement> state.statement
+    localstat.vars[0] = 'renamedVar'
+
+    // Insert a new statement.
+    state.insertAfter(<ReturnStatement> {
+      type: StatementType.ReturnStatement,
+      exprs: [t.name('renamedVar')]
+    })
+  }
+})
+
+// Render the transformed ast.
+// The '0' is the initial tab level - leave at 0.
+console.log(pretty.render(0, ast))
+```
