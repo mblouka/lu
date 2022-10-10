@@ -51,6 +51,14 @@ export const Operators = [
     '@', '|' // Lu
 ].sort((x, y) => y.length - x.length);
 
+const charmap = <Record<string, string>> {
+    // lua literals
+    a: '\a', b: '\b', f: '\f',
+    n: '\n', r: '\r', t: '\t',
+    v: '\v', '\\': '\\', '"': '"',
+    '\'': '\'', '[': '[', ']': ']'
+}
+
 export enum TokenType {
     Comment, Operator, Word, Name, Number, String, Whitespace, Invalid
 }
@@ -107,38 +115,64 @@ export function lex(source: string): Token[] {
         
         /* Process a single escape character. */
         function escape() {
-            return ''
+            i++ // skip over '\'
+
+            const mapped = charmap[source[i]]
+            if (mapped !== undefined) {
+                return i++, mapped
+            } else if (source[i] === 'z') {
+                return i++, 'z' // string long mode per luau spec
+            } else if (source[i] === 'x') {
+                i++ // skip over x
+                const numValue = parseInt(source[i] + source[i + 1], 16)
+                if (isNaN(numValue)) {
+                    error(`Hex literal in string is invalid.`)
+                }
+                i += 2 // skip over the two hex digits
+                return String.fromCharCode(numValue)
+            } else if (source[i] === 'u') {
+                i++ // skip over u
+                if (source[i] !== '{') {
+                    error('Bracket missing in unicode literal in string.')
+                }
+                i++ // skip over bracket
+                let unicodeCodepoint = ''
+                while (source[i] !== '}') {
+                    if (!str.hexadecimal(source[i])) {
+                        error('Invalid character in unicode literal in string.')
+                    }
+                    unicodeCodepoint += source[i]
+                }
+                i++ // skip over bracket
+                return String.fromCodePoint(parseInt(unicodeCodepoint, 16))
+            }
         }
 
         if (terminator === '"' || terminator === '\'') {
             i++ // skip over first character
 
-            let str = '';
-            let longMode = false // implemented as \z in Luau
+            let fstr = '';
             while (source[i] !== terminator && !eob()) {
                 const c = source[i]
 
                 /* String newline behavior. */
                 if (c === '\n') {
-                    if (longMode) {
-                        str += (line++, i++, '\n')
-                        continue
-                    } else {
-                        break
-                    }
+                    break
                 }
 
                 /* Process escape characters. */
                 if (c === '\\') {
                     const esc = escape()
                     if (esc === 'z') {
-                        longMode = true
+                        while (str.whitespace(source[i])) {
+                            i++
+                        }
                         continue
                     } else {
-                        str += esc
+                        fstr += esc
                     }
                 } else {
-                    str += c
+                    fstr += c
                 }
 
                 // Skip to next character.
@@ -148,7 +182,7 @@ export function lex(source: string): Token[] {
 
             return { 
                 type: TokenType.String, 
-                value: str,
+                value: fstr,
                 line: startline,
                 annotations: { 
                     string: {
@@ -166,21 +200,29 @@ export function lex(source: string): Token[] {
                 i++
             }
 
-            let str = '';
+            let fstr = '';
             while (!test(eqStr)) {
                 const c = source[i]
 
                 /* String newline behavior. */
                 if (c === '\n') {
-                    str += (line++, i++, '\n')
+                    fstr += (line++, i++, '\n')
                     continue
                 }
 
                 /* Process escape characters. */
                 if (c === '\\') {
-                    str += escape()
+                    const esc = escape()
+                    if (esc === 'z') {
+                        while (str.whitespace(source[i])) {
+                            i++
+                        }
+                        continue
+                    } else {
+                        fstr += esc
+                    }
                 } else {
-                    str += c
+                    fstr += c
                 }
 
                 // Skip to next character.
@@ -190,7 +232,7 @@ export function lex(source: string): Token[] {
 
             return { 
                 type: TokenType.String, 
-                value: str,
+                value: fstr,
                 line: startline,
                 annotations: { 
                     string: {

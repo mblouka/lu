@@ -101,8 +101,8 @@ end
     - [ ] Tests must be written to guarantee stability.
   - [ ] Luau additions
     - [x] `continue`
-    - [ ] Extended string literals (`\x`, `\u`, `\z`)
-    - [ ] Binary number literals (`0b01010101`)
+    - [x] Extended string literals (`\x`, `\u`, `\z`)
+    - [x] Binary number literals (`0b01010101`)
     - [ ] Type declaration parsing
     - [ ] Type constraint parsing in function args
     - [ ] Type constraint parsing in variable declaration
