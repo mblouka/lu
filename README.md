@@ -125,7 +125,7 @@ end
     - [ ] Generalized iteration when an inline table is detected
     - [ ] If/then/else expression
   - [x] Pretty printing for readability and debugging
-  - [ ] Minified printing for bundles and distribution
+  - [x] Minified printing for bundles and distribution
 
 ### **Stage 2**: `lu` tool for project and dependency management
 - [x] Compilation options setup through a `luconfig.json` file.
